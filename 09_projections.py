@@ -276,12 +276,20 @@ def fetch_player_games(player_id) -> list:
 
 
 def team_abbrev_maps():
-    """Return (full_name_lower -> abbrev, abbrev -> full_name) from nba_api."""
+    """Return (name_lower -> abbrev, abbrev -> full_name) from nba_api.
+
+    The name map accepts a full name ('New York Knicks'), a nickname
+    ('Knicks' -- what nba_players.team actually stores), or an abbreviation
+    ('NYK'), so team lookups work no matter which form a table uses.
+    """
     name_to_abbr = {}
     abbr_to_name = {}
     for t in teams.get_teams():
-        name_to_abbr[t["full_name"].lower()] = t["abbreviation"]
-        abbr_to_name[t["abbreviation"]] = t["full_name"]
+        abbr = t["abbreviation"]
+        name_to_abbr[t["full_name"].lower()] = abbr
+        name_to_abbr[t["nickname"].lower()] = abbr
+        name_to_abbr[abbr.lower()] = abbr
+        abbr_to_name[abbr] = t["full_name"]
     return name_to_abbr, abbr_to_name
 
 

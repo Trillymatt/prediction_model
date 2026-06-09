@@ -70,38 +70,38 @@
   ],
   "production_includes_playoffs": true,
   "production_rows": 87028,
-  "backtest_train_rows": 59723,
-  "backtest_test_rows": 27305,
+  "backtest_train_rows": 59721,
+  "backtest_test_rows": 27307,
   "metrics": {
     "points": {
-      "model_mae": 4.6582,
-      "model_rmse": 6.0502,
-      "bias": 0.2923,
-      "baseline_season_mae": 4.7263,
-      "baseline_l10_mae": 4.6991,
-      "improvement_vs_season_pct": 1.44,
-      "improvement_vs_l10_pct": 0.87,
-      "interval_coverage": 0.6693
+      "model_mae": 4.6627,
+      "model_rmse": 6.0534,
+      "bias": 0.3284,
+      "baseline_season_mae": 4.7283,
+      "baseline_l10_mae": 4.7075,
+      "improvement_vs_season_pct": 1.39,
+      "improvement_vs_l10_pct": 0.95,
+      "interval_coverage": 0.6651
     },
     "rebounds": {
-      "model_mae": 1.9176,
-      "model_rmse": 2.506,
-      "bias": 0.0968,
-      "baseline_season_mae": 1.9382,
-      "baseline_l10_mae": 1.9477,
-      "improvement_vs_season_pct": 1.06,
-      "improvement_vs_l10_pct": 1.54,
-      "interval_coverage": 0.6697
+      "model_mae": 1.9217,
+      "model_rmse": 2.5068,
+      "bias": 0.0993,
+      "baseline_season_mae": 1.9426,
+      "baseline_l10_mae": 1.9541,
+      "improvement_vs_season_pct": 1.08,
+      "improvement_vs_l10_pct": 1.66,
+      "interval_coverage": 0.6701
     },
     "assists": {
-      "model_mae": 1.3802,
-      "model_rmse": 1.8464,
-      "bias": 0.1391,
+      "model_mae": 1.3791,
+      "model_rmse": 1.8453,
+      "bias": 0.1341,
       "baseline_season_mae": 1.3712,
       "baseline_l10_mae": 1.3756,
-      "improvement_vs_season_pct": -0.66,
-      "improvement_vs_l10_pct": -0.33,
-      "interval_coverage": 0.6662
+      "improvement_vs_season_pct": -0.58,
+      "improvement_vs_l10_pct": -0.25,
+      "interval_coverage": 0.6609
     }
   }
 }

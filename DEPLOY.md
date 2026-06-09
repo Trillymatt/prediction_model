@@ -36,9 +36,11 @@ player-games), so pushing once a week is plenty.
 `stats.nba.com` aggressively blocks requests from cloud datacenter IPs, so the
 data-pull pipeline (01–08, 12) is unreliable from Railway/AWS/GCP boxes. The
 deployed web app is unaffected — it only talks to Supabase at runtime. Keep
-the existing local cron:
+the existing local LaunchAgent (runs refresh.py at 4am, catches up after
+sleep):
 
-    0 4 * * * cd /path/to/money_from_a_baby && /usr/bin/python3 refresh.py >> refresh.log 2>&1
+    ~/Library/LaunchAgents/com.moneyfromababy.refresh.plist
+    # manage with: launchctl kickstart|bootout gui/501/com.moneyfromababy.refresh
 
 If you later want the refresh fully in the cloud, the usual options are a
 residential/rotating proxy for the nba_api calls, or a small always-on box
