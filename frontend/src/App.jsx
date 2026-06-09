@@ -13,15 +13,40 @@ const STAT_LABELS = {
   rebounds: "Rebounds",
   assists: "Assists",
   threes: "3-Pointers Made",
+  threes_attempted: "3-Point Attempts",
+  fgm: "Field Goals Made",
+  fga: "Field Goal Attempts",
+  ftm: "Free Throws Made",
+  fta: "Free Throw Attempts",
   steals: "Steals",
   blocks: "Blocks",
   turnovers: "Turnovers",
+  fouls: "Personal Fouls",
+  oreb: "Offensive Rebounds",
+  dreb: "Defensive Rebounds",
   pra: "Pts + Reb + Ast",
   pr: "Pts + Reb",
   pa: "Pts + Ast",
   ra: "Reb + Ast",
   stocks: "Steals + Blocks",
 };
+
+// Dropdown order: scoring first, then shooting volume, boards/playmaking,
+// defense/misc, then combos. Anything the API adds later lands at the end.
+const STAT_ORDER = [
+  "points", "rebounds", "assists", "threes", "threes_attempted",
+  "fgm", "fga", "ftm", "fta",
+  "oreb", "dreb", "steals", "blocks", "turnovers", "fouls",
+  "pra", "pr", "pa", "ra", "stocks",
+];
+
+function sortStats(stats) {
+  return [...stats].sort((a, b) => {
+    const ia = STAT_ORDER.indexOf(a);
+    const ib = STAT_ORDER.indexOf(b);
+    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+  });
+}
 
 function PlayerSearch({ selected, onSelect }) {
   const [query, setQuery] = useState("");
@@ -388,7 +413,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    fetchStats().then(setStats).catch(() => {});
+    fetchStats().then((s) => setStats(sortStats(s))).catch(() => {});
   }, []);
 
   const run = async () => {

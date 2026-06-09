@@ -83,6 +83,11 @@ STAT_NOUNS = {
     "threes": "threes", "steals": "steals", "blocks": "blocks",
     "turnovers": "turnovers", "pra": "pts+reb+ast", "pr": "pts+reb",
     "pa": "pts+ast", "ra": "reb+ast", "stocks": "stl+blk",
+    "fgm": "field goals made", "fga": "field goal attempts",
+    "ftm": "free throws made", "fta": "free throw attempts",
+    "threes_attempted": "three-point attempts",
+    "fouls": "personal fouls", "oreb": "offensive rebounds",
+    "dreb": "defensive rebounds",
 }
 
 # Form-blend weights. Normalized at runtime over whichever windows have data, so
@@ -134,11 +139,27 @@ STAT_DEFS = {
     "blocks": ["blocks"],
     "turnovers": ["turnovers"],
     "threes": ["three_made"],
+    "threes_attempted": ["three_attempted"],
+    "fgm": ["fg_made"],
+    "fga": ["fg_attempted"],
+    "ftm": ["ft_made"],
+    "fta": ["ft_attempted"],
     "pra": ["points", "rebounds", "assists"],
     "pr": ["points", "rebounds"],
     "pa": ["points", "assists"],
     "ra": ["rebounds", "assists"],
     "stocks": ["steals", "blocks"],
+}
+
+# Stats whose game-log columns don't exist in Supabase yet (need `ALTER TABLE
+# nba_player_game_logs ADD COLUMN fouls int, ADD COLUMN oreb int, ADD COLUMN
+# dreb int;` + a historical re-pull with 01 --full). Probed once at import:
+# the moment the columns exist, these stats appear in STAT_DEFS / the API
+# automatically -- no code change needed.
+OPTIONAL_STAT_DEFS = {
+    "fouls": ["fouls"],
+    "oreb": ["oreb"],
+    "dreb": ["dreb"],
 }
 
 ENV_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
@@ -152,6 +173,28 @@ if not SUPABASE_URL or not SUPABASE_KEY:
     )
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# Game-log columns fetched for every projection (all single-stat components).
+LOG_COLUMNS = [
+    "game_date", "season", "season_type", "opponent", "home_away",
+    "minutes_played", "points", "rebounds", "assists", "steals", "blocks",
+    "turnovers", "three_made", "three_attempted", "fg_made", "fg_attempted",
+    "ft_made", "ft_attempted",
+]
+
+
+def _enable_optional_stats():
+    """Activate fouls/oreb/dreb if their columns exist in Supabase (see above)."""
+    optional_cols = sorted({c for cols in OPTIONAL_STAT_DEFS.values() for c in cols})
+    try:
+        supabase.table(LOGS_TABLE).select(",".join(optional_cols)).limit(1).execute()
+    except Exception:  # noqa: BLE001 - columns absent => stats stay off
+        return
+    STAT_DEFS.update(OPTIONAL_STAT_DEFS)
+    LOG_COLUMNS.extend(optional_cols)
+
+
+_enable_optional_stats()
 
 
 # ---------------------------------------------------------------------------
@@ -252,10 +295,7 @@ def find_player(name: str):
 
 def fetch_player_games(player_id) -> list:
     """All game-log rows for a player, oldest-first. Pages past the 1000 cap."""
-    columns = (
-        "game_date,season,season_type,opponent,home_away,minutes_played,"
-        "points,rebounds,assists,steals,blocks,turnovers,three_made"
-    )
+    columns = ",".join(LOG_COLUMNS)
     rows = []
     start = 0
     while True:

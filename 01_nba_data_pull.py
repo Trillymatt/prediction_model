@@ -57,6 +57,26 @@ if not SUPABASE_URL or not SUPABASE_KEY:
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+# Optional columns (prop stats the table may not have yet). If they exist in
+# Supabase, we map them from the API; if not, we leave them out of the upsert
+# so it doesn't error. Add them with:
+#   ALTER TABLE nba_player_game_logs
+#     ADD COLUMN fouls int, ADD COLUMN oreb int, ADD COLUMN dreb int;
+# then re-pull history once (python 01_nba_data_pull.py --full) to backfill.
+OPTIONAL_COLUMNS = {"fouls": "PF", "oreb": "OREB", "dreb": "DREB"}
+
+
+def _optional_columns_present() -> bool:
+    """True if the optional columns exist in nba_player_game_logs."""
+    try:
+        supabase.table(TABLE_NAME).select(",".join(OPTIONAL_COLUMNS)).limit(1).execute()
+        return True
+    except Exception:  # noqa: BLE001 - columns absent
+        return False
+
+
+HAS_OPTIONAL_COLUMNS = _optional_columns_present()
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -112,7 +132,12 @@ def to_int(value):
 def build_record(row: dict, player_name: str, season: str, season_type: str) -> dict:
     """Map a PlayerGameLog row into our table schema."""
     team, opponent, home_away = parse_matchup(row.get("MATCHUP"))
+    extra = (
+        {col: to_int(row.get(api_key)) for col, api_key in OPTIONAL_COLUMNS.items()}
+        if HAS_OPTIONAL_COLUMNS else {}
+    )
     return {
+        **extra,
         "player_id": row.get("Player_ID"),
         "player_name": player_name,
         "game_date": parse_game_date(row.get("GAME_DATE")),
