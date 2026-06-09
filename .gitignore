@@ -1,0 +1,17 @@
+# Secrets — never commit
+.env
+
+# Python
+__pycache__/
+*.pyc
+
+# Generated training data (regenerate with 10/12_build_*_training_data.py)
+training_data.csv
+game_training_data.csv
+
+# Node / frontend
+frontend/node_modules/
+frontend/dist/
+
+# Logs
+*.log

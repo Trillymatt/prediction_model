@@ -1,0 +1,107 @@
+{
+  "test_season": "2025-26",
+  "prediction_scheme": "residual_over_anchor",
+  "anchor_order": [
+    "season",
+    "l10",
+    "l5"
+  ],
+  "numeric_features": [
+    "home",
+    "days_rest",
+    "season_games_todate",
+    "l5_points",
+    "l10_points",
+    "season_points",
+    "l5_rebounds",
+    "l10_rebounds",
+    "season_rebounds",
+    "l5_assists",
+    "l10_assists",
+    "season_assists",
+    "l5_minutes",
+    "l10_minutes",
+    "h2h_points",
+    "h2h_rebounds",
+    "h2h_assists",
+    "opp_points_allowed_to_pos",
+    "opp_rebounds_allowed_to_pos",
+    "opp_assists_allowed_to_pos"
+  ],
+  "categorical_features": [
+    "position",
+    "season_type"
+  ],
+  "features": [
+    "home",
+    "days_rest",
+    "season_games_todate",
+    "l5_points",
+    "l10_points",
+    "season_points",
+    "l5_rebounds",
+    "l10_rebounds",
+    "season_rebounds",
+    "l5_assists",
+    "l10_assists",
+    "season_assists",
+    "l5_minutes",
+    "l10_minutes",
+    "h2h_points",
+    "h2h_rebounds",
+    "h2h_assists",
+    "opp_points_allowed_to_pos",
+    "opp_rebounds_allowed_to_pos",
+    "opp_assists_allowed_to_pos",
+    "position",
+    "season_type"
+  ],
+  "sigma_floor": 1.0,
+  "quantiles": {
+    "low": 0.159,
+    "high": 0.841
+  },
+  "production_trained_on": "all_seasons",
+  "production_seasons": [
+    "2022-23",
+    "2023-24",
+    "2024-25",
+    "2025-26"
+  ],
+  "production_includes_playoffs": true,
+  "production_rows": 87028,
+  "backtest_train_rows": 59723,
+  "backtest_test_rows": 27305,
+  "metrics": {
+    "points": {
+      "model_mae": 4.6582,
+      "model_rmse": 6.0502,
+      "bias": 0.2923,
+      "baseline_season_mae": 4.7263,
+      "baseline_l10_mae": 4.6991,
+      "improvement_vs_season_pct": 1.44,
+      "improvement_vs_l10_pct": 0.87,
+      "interval_coverage": 0.6693
+    },
+    "rebounds": {
+      "model_mae": 1.9176,
+      "model_rmse": 2.506,
+      "bias": 0.0968,
+      "baseline_season_mae": 1.9382,
+      "baseline_l10_mae": 1.9477,
+      "improvement_vs_season_pct": 1.06,
+      "improvement_vs_l10_pct": 1.54,
+      "interval_coverage": 0.6697
+    },
+    "assists": {
+      "model_mae": 1.3802,
+      "model_rmse": 1.8464,
+      "bias": 0.1391,
+      "baseline_season_mae": 1.3712,
+      "baseline_l10_mae": 1.3756,
+      "improvement_vs_season_pct": -0.66,
+      "improvement_vs_l10_pct": -0.33,
+      "interval_coverage": 0.6662
+    }
+  }
+}

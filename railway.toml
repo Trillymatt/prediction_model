@@ -1,0 +1,11 @@
+# Railway service config: one service builds the Dockerfile and runs the API,
+# which also serves the built frontend. Set SUPABASE_URL and SUPABASE_KEY in
+# the service's Variables tab.
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+healthcheckPath = "/api/health"
+healthcheckTimeout = 120
+restartPolicyType = "ON_FAILURE"

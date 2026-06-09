@@ -1,0 +1,102 @@
+{
+  "test_season": "2025-26",
+  "prediction_scheme": "residual_over_anchor",
+  "anchors": {
+    "margin": "home_season_net - away_season_net",
+    "total": "(home_ppg + home_papg + away_ppg + away_papg) / 2"
+  },
+  "numeric_features": [
+    "home_days_rest",
+    "away_days_rest",
+    "home_season_games",
+    "away_season_games",
+    "home_season_ppg",
+    "home_season_papg",
+    "home_season_net",
+    "home_season_win_pct",
+    "away_season_ppg",
+    "away_season_papg",
+    "away_season_net",
+    "away_season_win_pct",
+    "home_l10_ppg",
+    "home_l10_papg",
+    "home_l10_win_pct",
+    "away_l10_ppg",
+    "away_l10_papg",
+    "away_l10_win_pct",
+    "home_l5_ppg",
+    "home_l5_papg",
+    "away_l5_ppg",
+    "away_l5_papg"
+  ],
+  "categorical_features": [
+    "season_type"
+  ],
+  "features": [
+    "home_days_rest",
+    "away_days_rest",
+    "home_season_games",
+    "away_season_games",
+    "home_season_ppg",
+    "home_season_papg",
+    "home_season_net",
+    "home_season_win_pct",
+    "away_season_ppg",
+    "away_season_papg",
+    "away_season_net",
+    "away_season_win_pct",
+    "home_l10_ppg",
+    "home_l10_papg",
+    "home_l10_win_pct",
+    "away_l10_ppg",
+    "away_l10_papg",
+    "away_l10_win_pct",
+    "home_l5_ppg",
+    "home_l5_papg",
+    "away_l5_ppg",
+    "away_l5_papg",
+    "season_type"
+  ],
+  "sigma_floor": {
+    "margin": 8.0,
+    "total": 10.0
+  },
+  "quantiles": {
+    "low": 0.159,
+    "high": 0.841
+  },
+  "production_trained_on": "all_seasons",
+  "production_seasons": [
+    "2022-23",
+    "2023-24",
+    "2024-25",
+    "2025-26"
+  ],
+  "production_rows": 4925,
+  "backtest_train_rows": 3696,
+  "backtest_test_rows": 1229,
+  "metrics": {
+    "margin": {
+      "model_mae": 11.6044,
+      "model_rmse": 14.7904,
+      "bias": 0.8697,
+      "anchor_mae": 11.7911,
+      "improvement_vs_anchor_pct": 1.58,
+      "interval_coverage": 0.633
+    },
+    "total": {
+      "model_mae": 15.3715,
+      "model_rmse": 19.2155,
+      "bias": 2.3322,
+      "anchor_mae": 15.4708,
+      "improvement_vs_anchor_pct": 0.64,
+      "interval_coverage": 0.6526
+    },
+    "winner": {
+      "accuracy": 0.6867,
+      "baseline_home_always": 0.5517,
+      "baseline_anchor_margin": 0.6688,
+      "brier": 0.2049
+    }
+  }
+}

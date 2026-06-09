@@ -1,0 +1,20 @@
+# Secrets
+.env
+
+# Python cruft
+__pycache__/
+*.pyc
+
+# Generated data (the models/ dir is what ships; CSVs are rebuildable)
+training_data.csv
+game_training_data.csv
+*.log
+
+# Frontend is built inside the image
+frontend/node_modules/
+frontend/dist/
+
+# Repo/tooling
+.git/
+.claude/
+.gitignore

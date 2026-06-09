@@ -1,0 +1,37 @@
+// Tiny fetch wrappers around the FastAPI backend. URLs are relative; the Vite
+// dev server proxies /api to http://localhost:8000.
+
+async function getJSON(url) {
+  const res = await fetch(url);
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(body.detail || `Request failed (${res.status})`);
+  }
+  return body;
+}
+
+export function fetchStats() {
+  return getJSON("/api/stats").then((d) => d.stats);
+}
+
+export function searchPlayers(q) {
+  return getJSON(`/api/players?q=${encodeURIComponent(q)}`).then((d) => d.players);
+}
+
+export function projectStat({ player, stat, line, opponent, location, gameType }) {
+  const params = new URLSearchParams({ player, stat, location, game_type: gameType });
+  if (line !== "" && line != null) params.set("line", line);
+  if (opponent) params.set("opponent", opponent);
+  return getJSON(`/api/project?${params.toString()}`);
+}
+
+export function fetchUpcomingGames(days = 10) {
+  return getJSON(`/api/games?days=${days}`).then((d) => d.games);
+}
+
+export function projectGame({ home, away, date, gameId }) {
+  const params = new URLSearchParams({ home, away });
+  if (date) params.set("date", date);
+  if (gameId) params.set("game_id", gameId);
+  return getJSON(`/api/game?${params.toString()}`);
+}
