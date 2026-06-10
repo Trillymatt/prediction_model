@@ -12,7 +12,11 @@ nothing new to ingest and it exits early.
 When it does run, it executes the pipeline in dependency order:
     01 game logs -> 02 team stats -> 03 schedule -> 04 players ->
     05 defense-vs-pos -> 06 averages -> 07 head-to-head -> 08 injuries ->
-    10 rebuild training data -> 11 retrain model
+    10 rebuild training data -> 11 retrain model -> 12/13 game model ->
+    20 soccer schedule -> 21 soccer player logs
+
+The gate also checks soccer_schedule, so during the World Cup the soccer
+data refreshes nightly even on NBA off-nights (and vice versa).
 
 Each step's output is streamed; a failing step is logged but doesn't abort the
 rest (the data scripts are all idempotent upserts, so a partial run is safe).
@@ -39,7 +43,7 @@ if not SUPABASE_URL or not SUPABASE_KEY:
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # Pipeline, in dependency order. (04 players before 05; 01 before 05/06/07/10;
-# 10 before 11; 12 before 13.)
+# 10 before 11; 12 before 13; soccer: 20 schedule before 21 player logs.)
 PIPELINE = [
     "01_nba_data_pull.py",
     "02_team_stats.py",
@@ -53,6 +57,8 @@ PIPELINE = [
     "11_train_model.py",
     "12_build_game_training_data.py",
     "13_train_game_model.py",
+    "20_soccer_schedule.py",
+    "21_soccer_player_logs.py",
 ]
 
 
@@ -71,6 +77,27 @@ def games_were_played(on_day: date) -> bool:
         .execute()
     )
     return bool(res.data)
+
+
+def soccer_matches_were_played(on_day: date) -> bool:
+    """True if soccer_schedule has any match dated `on_day`.
+
+    The soccer Elo/form ratings live entirely in soccer_schedule (no model
+    retrain), so a soccer match day just needs the two soccer pull scripts to
+    run -- but the whole pipeline is idempotent, so we simply un-skip the
+    night. Errors (e.g. table not created yet) count as 'no matches'.
+    """
+    try:
+        res = (
+            supabase.table("soccer_schedule")
+            .select("match_id")
+            .eq("match_date", on_day.isoformat())
+            .limit(1)
+            .execute()
+        )
+        return bool(res.data)
+    except Exception:  # noqa: BLE001 - soccer not set up => NBA gate decides
+        return False
 
 
 def schedule_is_stale() -> bool:
@@ -109,11 +136,13 @@ def main():
     stamp = time.strftime("%Y-%m-%d %H:%M:%S")
     print(f"[{stamp}] refresh starting (yesterday = {yesterday})")
 
-    if not force and not games_were_played(yesterday):
+    if not force and not games_were_played(yesterday) \
+            and not soccer_matches_were_played(yesterday):
         if schedule_is_stale():
             print("Schedule table has no future games -- reseeding via full run.")
         else:
-            print("No games found for yesterday -- nothing to refresh. Exiting.")
+            print("No NBA or soccer games found for yesterday -- nothing to "
+                  "refresh. Exiting.")
             return
 
     print("Games detected (or --force). Running pipeline.\n")

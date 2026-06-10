@@ -1,0 +1,1136 @@
+{
+  "meta": {
+    "description": "2026 FIFA World Cup team knowledge base: researched scouting profiles + Elo snapshot. Seeds the soccer engines' ratings and explanation cards. Elo updates live from results in soccer_schedule after elo_snapshot_date.",
+    "generated": "2026-06-10",
+    "elo_snapshot_date": "2026-06-09",
+    "sources": "Web research June 2026: FIFA.com, ESPN, Wikipedia, eloratings.net, Fox/NBC/Yahoo Sports previews; cross-checked across multiple outlets.",
+    "format": {
+      "start_date": "2026-06-11",
+      "final_date": "2026-07-19",
+      "group_stage_dates": "2026-06-11 to 2026-06-27",
+      "round_of_32_start": "2026-06-28",
+      "advancement": "top 2 of each group plus 8 best third-placed teams advance to round of 32",
+      "num_teams": 48,
+      "num_groups": 12,
+      "total_matches": 104,
+      "group_stage_rules": "Standard round-robin: 3 points for a win, 1 for a draw, 0 for a loss; draws are allowed in the group stage (no extra time or penalties); matches are 90 minutes plus stoppage time",
+      "knockout_rules": "Single elimination from round of 32 onward; extra time and penalty shootouts apply if level after 90 minutes",
+      "hosts": [
+        "United States",
+        "Mexico",
+        "Canada"
+      ],
+      "draw_date": "2025-12-05",
+      "playoff_slotting": "UEFA playoff winners (March 2026): Bosnia and Herzegovina (Path A) -> Group B, Sweden (Path B) -> Group F, Türkiye (Path C) -> Group D, Czechia (Path D) -> Group A. Inter-confederation playoff winners (March 2026): DR Congo (Path 1, beat Jamaica 1-0) -> Group K, Iraq (Path 2, beat Bolivia 2-1) -> Group I"
+    },
+    "groups": {
+      "A": [
+        "Mexico",
+        "South Africa",
+        "South Korea",
+        "Czechia"
+      ],
+      "B": [
+        "Canada",
+        "Switzerland",
+        "Qatar",
+        "Bosnia and Herzegovina"
+      ],
+      "C": [
+        "Brazil",
+        "Morocco",
+        "Scotland",
+        "Haiti"
+      ],
+      "D": [
+        "United States",
+        "Paraguay",
+        "Australia",
+        "Türkiye"
+      ],
+      "E": [
+        "Germany",
+        "Ecuador",
+        "Ivory Coast",
+        "Curaçao"
+      ],
+      "F": [
+        "Netherlands",
+        "Japan",
+        "Tunisia",
+        "Sweden"
+      ],
+      "G": [
+        "Belgium",
+        "Egypt",
+        "Iran",
+        "New Zealand"
+      ],
+      "H": [
+        "Spain",
+        "Uruguay",
+        "Saudi Arabia",
+        "Cape Verde"
+      ],
+      "I": [
+        "France",
+        "Senegal",
+        "Norway",
+        "Iraq"
+      ],
+      "J": [
+        "Argentina",
+        "Algeria",
+        "Austria",
+        "Jordan"
+      ],
+      "K": [
+        "Portugal",
+        "Colombia",
+        "Uzbekistan",
+        "DR Congo"
+      ],
+      "L": [
+        "England",
+        "Croatia",
+        "Ghana",
+        "Panama"
+      ]
+    },
+    "elo_note": "elo values recalibrated 2026-06-10 onto a single eloratings.net-anchored scale for cross-group consistency; each team's original research estimate kept as elo_research."
+  },
+  "teams": [
+    {
+      "team": "Mexico",
+      "group": "A",
+      "coach": "Javier Aguirre - pragmatic veteran in his third stint with El Tri; returned in 2024 and won the Gold Cup and CONCACAF Nations League, and says the home World Cup is the chance to finally break Mexico's quarterfinal barrier.",
+      "fifa_rank": 15,
+      "elo": 1850,
+      "style": "Quick, possession-oriented passing game built through midfielders Alvaro Fidalgo and Alexis Vega, with width and pace in transition; Aguirre is pragmatic and adaptable rather than dogmatic about formation (typically a 4-3-3/4-2-3-1).",
+      "attack": "Real firepower up front for the first time in years: Raul Jimenez is in good form at Fulham, Santiago Gimenez is a genuine No. 9 at AC Milan, and Julian Quinones finished among the Saudi league's top scorers. 17-year-old playmaker Gilberto Mora is touted as a potential breakout star of the tournament.",
+      "defense": "The clear weakness: Aguirre travels with only three natural centre-backs and that thinness is where better teams will attack. Heavy defeats in 2025 (0-4 vs Colombia, 2-4 vs Switzerland) exposed gaps, though March 2026 draws with Portugal and Belgium suggested they have narrowed. 40-year-old Guillermo Ochoa is in the squad for a record-tying sixth World Cup, though no longer the certain starter.",
+      "key_players": [
+        "Raul Jimenez (ST, Fulham)",
+        "Santiago Gimenez (ST, AC Milan)",
+        "Gilberto Mora (AM, 17-year-old, Tijuana)",
+        "Julian Quinones (FW, Saudi Pro League)",
+        "Alvaro Fidalgo (CM, Club America)",
+        "Guillermo Ochoa (GK, 6th World Cup)"
+      ],
+      "form": "Auto-qualified as co-host; won the 2025 Gold Cup and Nations League under Aguirre. Form dipped badly in late 2025 (0-4 to Colombia) but March 2026 draws against Portugal and Belgium restored confidence. Opens the tournament June 11 vs South Africa at the Azteca.",
+      "outlook": "Heavy -125 favorite to win Group A with home advantage in all three group games (ESPN models give ~95% to advance); consensus sees a round-of-16 run with the eternal 'quinto partido' (quarterfinal) as the dream target.",
+      "strength_tier": 2,
+      "elo_research": 1800
+    },
+    {
+      "team": "South Korea",
+      "group": "A",
+      "coach": "Hong Myung-bo - in his second spell as national coach (he also led Korea at the 2014 World Cup); his side went unbeaten through the entire AFC qualifying campaign, playing disciplined, transition-based football around Son Heung-min.",
+      "fifa_rank": 25,
+      "elo": 1780,
+      "style": "Compact, well-organized 4-2-3-1/4-4-2 that defends in a mid-block and breaks quickly through the pace and technique of its European-based attackers; the only Asian side to go unbeaten in qualifying.",
+      "attack": "Captain Son Heung-min (now at LAFC after a decade at Tottenham) remains the most potent weapon at his fourth World Cup, supported by PSG playmaker Lee Kang-in. Korea scored 40 goals across 16 unbeaten qualifiers, though recent friendly losses showed they can struggle to create against elite athleticism.",
+      "defense": "Anchored by Bayern Munich centre-back Kim Min-jae, one of the best defenders at the tournament. Only 8 goals conceded in 16 qualifiers, but a 0-4 friendly loss to Ivory Coast in March 2026 raised concerns against top-level pace.",
+      "key_players": [
+        "Son Heung-min (FW, LAFC)",
+        "Kim Min-jae (CB, Bayern Munich)",
+        "Lee Kang-in (AM, Paris Saint-Germain)"
+      ],
+      "form": "Unbeaten in 16 qualifying matches (11 wins, 40 scored, 8 conceded). Mixed 2026 prep: beat Ghana 1-0, lost 0-4 to Ivory Coast and 0-1 to Austria in March, then won warm-ups 5-0 vs Trinidad & Tobago and 1-0 vs El Salvador in June. Arrives with momentum per FIFA's preview.",
+      "outlook": "Priced around +310 for the group and given roughly 77% to advance by ESPN models; consensus expects a round-of-32/16 appearance, with second place in Group A a tight battle with Czechia.",
+      "strength_tier": 3,
+      "elo_research": 1754
+    },
+    {
+      "team": "Czechia",
+      "group": "A",
+      "coach": "Miroslav Koubek - 74-year-old hired in December 2025 who steered Czechia through two playoff shootout wins to a first World Cup since 2006; a firm believer in the 3-4-2-1 he used to win the Czech title with Viktoria Plzen.",
+      "fifa_rank": 41,
+      "elo": 1700,
+      "style": "Koubek's trademark 3-4-2-1 with wing-backs; thrives on set pieces, physicality and size, with a veteran spine and a tight domestic core - effective but limited against elite technical sides.",
+      "attack": "Patrik Schick is the main goal threat with 25 international goals and four in qualifying, supported by playoff hero Pavel Sulc and the late-arriving runs of Tomas Soucek. Dangerous from dead balls and crosses; Adam Hlozek recovered from injury to make the squad.",
+      "defense": "Captain Ladislav Krejci marshals the back three in a physical, set-piece-resistant unit. Conceded twice inside 23 minutes against Ireland in the playoff before recovering, so vulnerability to fast starts is a concern; overall solid but not elite.",
+      "key_players": [
+        "Patrik Schick (ST, Bayer Leverkusen)",
+        "Tomas Soucek (CM, West Ham, 89 caps)",
+        "Ladislav Krejci (CB, captain)",
+        "Pavel Sulc (AM, playoff hero)",
+        "Adam Hlozek (FW)"
+      ],
+      "form": "Finished second in UEFA Group L behind Croatia, then won both playoffs on penalties - coming from 2-0 down vs Ireland, then beating Denmark. Perfect record under Koubek (4 wins), with June warm-up wins over Kosovo (2-1) and Guatemala (3-1). Momentum is real but built against modest opposition.",
+      "outlook": "Around +320 for the group and ~60% to advance per ESPN models; expected to fight South Korea for second and reach the round of 32, with the round of 16 a stretch goal.",
+      "strength_tier": 3,
+      "elo_research": 1691
+    },
+    {
+      "team": "South Africa",
+      "group": "A",
+      "coach": "Hugo Broos - 74-year-old Belgian in his self-declared final job in management; took over in 2021, led Bafana to fourth at the 2023 AFCON and has drilled a compact, disciplined side built almost entirely on domestic talent.",
+      "fifa_rank": 60,
+      "elo": 1620,
+      "style": "Compact, disciplined and counter-attacking, with a core drawn from Mamelodi Sundowns and Orlando Pirates (eight players each); 19 of the 26-man squad are home-based, giving strong cohesion but limited top-league experience.",
+      "attack": "Burnley's Lyle Foster is the primary striker and most productive forward of the era (10 goals in 26 caps), with Sundowns midfielder Teboho Mokoena the creative engine. Goals have dried up recently - no win in the five matches before the tournament.",
+      "defense": "Captain and keeper Ronwen Williams is the star - famous for saving four penalties in one 2023 AFCON shootout - behind a well-drilled, low-block defense. The unit is organized but was breached by Cameroon (1-2) at AFCON 2025 and has leaked goals to modest CONCACAF opposition in warm-ups.",
+      "key_players": [
+        "Ronwen Williams (GK, Mamelodi Sundowns, captain)",
+        "Lyle Foster (ST, Burnley)",
+        "Teboho Mokoena (CM, Mamelodi Sundowns)"
+      ],
+      "form": "Topped CAF qualifying Group C ahead of Nigeria, sealed with a 3-0 win over Rwanda - their first World Cup since hosting in 2010. But form since is poor: AFCON 2025 round-of-16 exit to Cameroon, then winless in five (draws with Panama, Nicaragua, Jamaica; loss to Panama).",
+      "outlook": "Clear group outsider at around +1200 (ESPN ~35% to advance), but in the 48-team format a third-place finish with 3-4 points could still reach the round of 32.",
+      "strength_tier": 4,
+      "elo_research": 1526
+    },
+    {
+      "team": "Switzerland",
+      "group": "B",
+      "coach": "Murat Yakin - in charge since 2021 and at his third major tournament; a flexible, pragmatic tactician who qualified unbeaten while conceding only two goals, building everything around captain Granit Xhaka.",
+      "fifa_rank": 19,
+      "elo": 1830,
+      "style": "Pragmatic, well-balanced 4-2-3-1 (with a back-three option) that controls games through Xhaka's tempo-setting, defends in a disciplined block and strikes through quick wide players like Ndoye and Okafor.",
+      "attack": "Functional rather than explosive: Dan Ndoye (Nottingham Forest) and Noah Okafor (Leeds) provide direct running, with Xhaka dictating from deep. Striker depth is the worry - Yakin kept faith with Zeki Amdouni despite his barely playing after an ACL injury at Burnley. Final warm-up was a 1-1 draw with Australia in San Diego.",
+      "defense": "The team's foundation: only two goals conceded in six unbeaten qualifiers, with Borussia Dortmund's Gregor Kobel in goal behind Inter's Manuel Akanji. One of the most reliable defensive structures of any non-elite side at the tournament.",
+      "key_players": [
+        "Granit Xhaka (CM, Sunderland, captain, record caps)",
+        "Manuel Akanji (CB, Inter Milan)",
+        "Gregor Kobel (GK, Borussia Dortmund)",
+        "Dan Ndoye (W, Nottingham Forest)",
+        "Noah Okafor (FW, Leeds United)",
+        "Zeki Amdouni (FW, Burnley, fitness doubt)"
+      ],
+      "form": "Qualified unbeaten for a sixth straight World Cup, sealing it in a tense November decider with Kosovo; conceded just twice in qualifying. June warm-up: 1-1 vs Australia. Opta makes them group favorites with an 85.4% chance to progress (group winners in 42.1% of sims).",
+      "outlook": "Clear -140 favorite to win Group B; consensus expects the round of 16, their ceiling in recent tournaments, with a quarterfinal possible if the draw opens up.",
+      "strength_tier": 3,
+      "elo_research": 1781
+    },
+    {
+      "team": "Canada",
+      "group": "B",
+      "coach": "Jesse Marsch - American in charge since May 2024; runs an aggressive high-pressing 4-4-2 his players call the 'Maplepress', built on relentless pressing and rapid transitions.",
+      "fifa_rank": 30,
+      "elo": 1760,
+      "style": "High-energy 4-4-2 press-and-transition machine: Eustaquio and Kone anchor a double pivot while wide men Buchanan and Ahmed press continuously; the shape demands maximum output and punishes teams that play out slowly.",
+      "attack": "Jonathan David, Canada's all-time top scorer (39 goals in 75 caps), leads the line after a strong debut Juventus season (8 Serie A goals). Captain Alphonso Davies provides elite pace from the left but is a hamstring doubt for the opener. Scored twice vs Uzbekistan and created enough vs Ireland in the final warm-ups.",
+      "defense": "Maxime Crepeau and Dayne St. Clair competed for the No. 1 shirt through the friendlies, with Crepeau impressing (penalty save vs Ireland). The back line is athletic and protected by the press, but individual quality is a tier below Switzerland's; set-piece defending and rest defense against quick switches are the known risks.",
+      "key_players": [
+        "Alphonso Davies (LB/LW, Bayern Munich, captain)",
+        "Jonathan David (ST, Juventus)",
+        "Stephen Eustaquio (CM, Porto, on loan at LAFC)",
+        "Tajon Buchanan (W, Villarreal)",
+        "Maxime Crepeau (GK)",
+        "Ismael Kone (CM)"
+      ],
+      "form": "Auto-qualified as co-host; final tune-ups: 2-0 win over Uzbekistan (June 2) and 1-1 draw with Ireland (June 6). All three group games are on Canadian soil (Toronto and Vancouver). Opta gives them a 79.8% chance of progressing, second-best in the group.",
+      "outlook": "Second favorite in Group B at about +200 behind Switzerland; consensus is comfortable progression to the round of 32 and a realistic shot at the round of 16, with home crowds the wildcard.",
+      "strength_tier": 3,
+      "elo_research": 1741
+    },
+    {
+      "team": "Qatar",
+      "group": "B",
+      "coach": "Julen Lopetegui - ex-Spain, Real Madrid, Sevilla and West Ham boss in charge since May 2025; brought Spanish-school positional play and guided Qatar through AFC qualifying to their first World Cup reached on merit.",
+      "fifa_rank": 55,
+      "elo": 1610,
+      "style": "Lopetegui's possession-based, positional 4-3-3/4-2-3-1 grafted onto the two-time Asian champions' technical core; comfortable on the ball against AFC opposition but untested against elite pressing.",
+      "attack": "The Afif-Almoez axis is genuinely productive: Almoez Ali was top scorer in all of AFC qualifying with 12 goals, while Akram Afif led the confederation with 11 assists in 16 matches and added 15 goals and 12 assists for Al-Sadd this season. Against top-30 sides, chance creation dries up - the June friendly vs El Salvador finished 0-0.",
+      "defense": "The main vulnerability: the 2022 home World Cup ended with three defeats and the defense remains entirely domestic-based with limited pace. Organized under Lopetegui but likely to face sustained pressure from Switzerland's and Canada's attacks (recent goals-against record vs strong sides not verifiable in detail).",
+      "key_players": [
+        "Akram Afif (W, Al-Sadd)",
+        "Almoez Ali (ST, Qatar Stars League)"
+      ],
+      "form": "Two-time reigning Asian champions who came through three rounds of AFC qualifying - their first World Cup via the qualification route after hosting in 2022. Warm-up form modest, including a 0-0 draw with El Salvador on June 6.",
+      "outlook": "Rank outsider at about +2500 for the group; Opta gives just a 43.5% chance of even a last-32 spot, with most pundits expecting a group-stage exit but better competitiveness than 2022.",
+      "strength_tier": 4,
+      "elo_research": 1591
+    },
+    {
+      "team": "Bosnia and Herzegovina",
+      "group": "B",
+      "coach": "Sergej Barbarez - former Bosnia striker who took over in 2024 and masterminded a fairytale playoff run, beating Wales and then Italy, both on penalties, to reach the nation's first World Cup since 2014.",
+      "fifa_rank": 65,
+      "elo": 1660,
+      "style": "Veteran-led, pragmatic side that funnels play toward target man Edin Dzeko, with Demirovic doing the pressing and channel work; a blend of last-dance veterans and an accelerating youth movement (Bajraktarevic, Tahirovic, Gigovic).",
+      "attack": "Still revolves around 40-year-old captain Edin Dzeko (146 caps, 72 goals), the oldest goalscorer in 2. Bundesliga history this season at Schalke, with Stuttgart's Ermedin Demirovic the ideal foil. PSV's 21-year-old Esmir Bajraktarevic - who scored the winning penalty vs Italy - adds wing pace, but overall goal volume is modest.",
+      "defense": "Workmanlike rather than solid: held Panama 1-1 in the June warm-up and survived the playoffs partly through goalkeeping and shootout nerve. Lacks top-five-league quality across the back line and will sit deep against Switzerland and Canada (specific qualifying goals-against not verified).",
+      "key_players": [
+        "Edin Dzeko (ST, Schalke, captain, 146 caps)",
+        "Ermedin Demirovic (ST, Stuttgart)",
+        "Esmir Bajraktarevic (W, PSV Eindhoven)",
+        "Benjamin Tahirovic (CM)",
+        "Armin Gigovic (CM)"
+      ],
+      "form": "Qualified the hard way: penalty-shootout playoff wins away to Wales and then against Italy, denying the Italians a place. Drew 1-1 with Panama in the June 6 friendly. Emotional momentum is enormous even if underlying form is ordinary.",
+      "outlook": "Around +500 to win the group; Opta gives them a 62.6% chance of reaching the round of 32 (largely via third place), with the June 12 opener vs Canada in Toronto pivotal.",
+      "strength_tier": 4,
+      "elo_research": 1589
+    },
+    {
+      "team": "Brazil",
+      "group": "C",
+      "coach": "Carlo Ancelotti - the serial Champions League winner took charge in 2025 after Brazil's post-Copa America instability, restoring order and giving the most talented squad in CONMEBOL a clear structure.",
+      "fifa_rank": 6,
+      "elo": 2020,
+      "style": "Ancelotti's flexible 4-2-3-1/4-3-3: a stable mid-block and quick vertical transitions releasing an elite front line of Vinicius Junior, Raphinha, Rodrygo and Estevao; less chaotic and more European in rhythm than recent Brazil sides.",
+      "attack": "Among the best attacks at the tournament: Vinicius Junior is the headline star (around 25/1 for top scorer), with Raphinha, Rodrygo and teenage sensation Estevao all genuine difference-makers. Models project 7.4 group-stage goals, second-most of any team. Beat Egypt 2-1 in the June 6 send-off friendly.",
+      "defense": "The relative weak point is full-back vulnerability and a history of knockout-round fragility, though the centre of defense and goalkeeping (Alisson/Ederson generation) remain top class. Qualifying included a 4-1 humbling by Argentina and a loss to Bolivia before Ancelotti stabilized things.",
+      "key_players": [
+        "Vinicius Junior (LW, Real Madrid)",
+        "Raphinha (RW, Barcelona)",
+        "Rodrygo (FW, Real Madrid)",
+        "Estevao (RW, Chelsea)",
+        "Alisson (GK, Liverpool)",
+        "Casemiro (DM, veteran anchor)"
+      ],
+      "form": "Patchy qualifying (including losses to Argentina and Bolivia) gave way to steadier form under Ancelotti through late 2025 and 2026; won the final warm-up 2-1 vs Egypt on June 6. Pundits rank them back in the world's top 5-6 sides.",
+      "outlook": "Fourth-or-fifth favorite for the title at roughly +800/+900 (behind Spain, France, England, alongside Argentina); models give ~97% to advance from Group C and ~60% to win it, with the June 13 Morocco opener the key test.",
+      "strength_tier": 1,
+      "elo_research": 1885
+    },
+    {
+      "team": "Morocco",
+      "group": "C",
+      "coach": "Mohamed Ouahbi - promoted in March 2026 after Walid Regragui's surprise departure following the AFCON; inherits Regragui's structure and a golden generation, with his own reputation built on Morocco's youth-development success.",
+      "fifa_rank": 7,
+      "elo": 1880,
+      "style": "Structured, athletic 4-3-3 in the mold of the 2022 semi-finalists: defensively disciplined, devastating on transitions, with Hakimi's overlaps and Brahim Diaz's creativity the main outlets; comfortable ceding possession to bigger sides.",
+      "attack": "Brahim Diaz was the most influential player at AFCON 2025 and PSG's Achraf Hakimi - rated the world's best right-back - effectively functions as an extra attacker. Depth concern: Youssef En-Nesyri was left out of the squad, putting goal-scoring load on the wide players and youngsters like Bilal El Khannouss and Chemsdine Talbi.",
+      "defense": "The hallmark since 2022: conceded once in the entire 2022 World Cup run and remains elite, with veteran Yassine Bounou in goal and Mazraoui in the back line. The world-record 19-match winning streak (June 2024-December 2025) was built on this defensive base.",
+      "key_players": [
+        "Achraf Hakimi (RB, Paris Saint-Germain, captain)",
+        "Brahim Diaz (AM, Real Madrid)",
+        "Yassine Bounou (GK, Al-Hilal)",
+        "Noussair Mazraoui (FB, Manchester United)",
+        "Bilal El Khannouss (AM)",
+        "Ayyoub Bouaddi (CM, Lille)"
+      ],
+      "form": "Set a world record of 19 consecutive international wins (June 2024-December 2025), cruised through CAF qualifying, and were awarded the AFCON 2025 title - the Rabat final vs Senegal was ruled a 3-0 forfeit after Senegal's walk-off protest, a controversial finish. Climbed to a historic 7th in the June 2026 FIFA rankings, the best by an African team since 1994. Coaching change in March 2026 is the one instability flag.",
+      "outlook": "Second favorite in Group C at around +400-450 and the most likely side to join Brazil in the round of 32 (88.7% per Opta); widely tipped as Africa's best dark horse to repeat or better their 2022 semifinal.",
+      "strength_tier": 2,
+      "elo_research": 1736
+    },
+    {
+      "team": "Scotland",
+      "group": "C",
+      "coach": "Steve Clarke - in charge since 2019 and now leading Scotland to their first World Cup since 1998; pragmatic and defense-first, favoring a flexible 4-2-3-1 over his older 3-5-2/4-4-2 looks.",
+      "fifa_rank": 43,
+      "elo": 1740,
+      "style": "Pragmatic, hard-working 4-2-3-1 with a compact block and midfield runners; the attacking plan funnels through McTominay's late box arrivals and set pieces rather than sustained possession dominance.",
+      "attack": "Scott McTominay - 2024-25 Serie A player of the year at Napoli - is the talisman, his bicycle kick igniting the 4-2 qualification clincher vs Denmark. John McGinn adds drive, but a reliable striker is the perennial problem: recalled Ross Stewart and Lawrence Shankland headline a modest centre-forward pool.",
+      "defense": "Captain Andy Robertson (92 caps) leads an experienced but aging back line; Angus Gunn was handed the No. 1 jersey with 43-year-old Craig Gordon as injury-hampered cover. Conceding twice at home to Denmark in the decider showed they can be opened up by top-tier attacks.",
+      "key_players": [
+        "Scott McTominay (CM, Napoli)",
+        "Andy Robertson (LB, Liverpool, captain)",
+        "John McGinn (CM, Aston Villa)",
+        "Kieran Tierney (LB/CB)",
+        "Angus Gunn (GK)",
+        "Lawrence Shankland (ST)"
+      ],
+      "form": "Topped UEFA qualifying Group C, sealing it with a dramatic 4-2 extra-time win over Denmark at Hampden (McTominay overhead kick, Tierney and McLean goals in added time) - their first World Cup in 28 years. National enthusiasm is sky-high; pundits see them as competitive but third-best in the group on talent.",
+      "outlook": "+1000-1200 for the group; Opta has them reaching the round of 32 in 65.6% of sims, with the June 19 Morocco game in Foxborough effectively a knockout for second place - a probable third-place/round-of-32 team.",
+      "strength_tier": 3,
+      "elo_research": 1684
+    },
+    {
+      "team": "Haiti",
+      "group": "C",
+      "coach": "Sebastien Migne - French journeyman appointed in summer 2024 who built an organized underdog unit despite never having set foot in Haiti, with all qualifiers played in Curacao due to the security crisis at home.",
+      "fifa_rank": 83,
+      "elo": 1500,
+      "style": "Compact, counter-attacking underdog setup leaning on athleticism and the pace of a young diaspora squad (average age 24, all but one player based abroad); deep block and direct transitions.",
+      "attack": "Arguably the most talented attacking unit Haiti have ever had: all-time top scorer Duckens Nazon scored six in qualifying including a hat-trick vs Costa Rica, and Sunderland's Wilson Isidor (a March 2026 allegiance switch from France) scored in two of his first four friendlies. Wolves' Jean-Ricner Bellegarde adds Premier League quality in midfield.",
+      "defense": "The weakest defensive unit in the group by every rating; qualified on organization and spirit rather than back-line quality, and is expected to concede heavily against Brazil and Morocco. No established top-five-league defenders in the squad.",
+      "key_players": [
+        "Duckens Nazon (ST, all-time top scorer)",
+        "Wilson Isidor (ST, Sunderland)",
+        "Jean-Ricner Bellegarde (CM, Wolverhampton Wanderers)"
+      ],
+      "form": "Topped CONCACAF third-round Group C (3 wins, 2 draws in 6) to qualify for a second-ever World Cup and first since 1974, when they lost all three games. The fairytale story of the draw, but warm-up results and ratings mark them as the clear group minnow.",
+      "outlook": "+10000 or longer to win the group and projected by most models to finish bottom with zero or one point; the stated internal target is Haiti's first-ever World Cup point, most plausibly vs Scotland.",
+      "strength_tier": 5,
+      "elo_research": 1583
+    },
+    {
+      "team": "Türkiye",
+      "group": "D",
+      "coach": "Vincenzo Montella - the Italian has overseen Turkey's return to the World Cup after 24 years (last appearance: the 2002 semifinal run) and built the team around its golden generation of attackers.",
+      "fifa_rank": 22,
+      "elo": 1810,
+      "style": "Technical, attack-minded side that funnels play through elite creators Arda Güler and Hakan Çalhanoğlu, with pace from Aktürkoğlu and Barış Alper Yılmaz. Real attacking quality but defensive vulnerability against top opposition (lost 6-0 to Spain in qualifying).",
+      "attack": "The clear strength: Arda Güler (Real Madrid) and Kenan Yıldız (Juventus) are two of Europe's brightest young attackers, with Kerem Aktürkoğlu a consistent goal threat. Porto's young striker Deniz Gül scored in the warm-up win over North Macedonia and has emerged as Montella's first-choice No. 9. Opened June prep with a 4-0 win over North Macedonia.",
+      "defense": "The weak side of the team relative to its attack - the 6-0 qualifying loss in Konya to Spain showed it can be opened up by elite opposition, though Turkey were otherwise solid (only defeats in qualifying came vs Spain). Ferdi Kadıoğlu and the back line did keep a clean sheet in the tense 1-0 playoff semifinal vs Romania. No standout-verified No. 1 narrative in sources reviewed.",
+      "key_players": [
+        "Arda Güler (AM, Real Madrid)",
+        "Hakan Çalhanoğlu (DM, Inter - captain)",
+        "Kenan Yıldız (AM/W, Juventus)",
+        "Kerem Aktürkoğlu (W, Benfica)",
+        "Barış Alper Yılmaz (W, Galatasaray)",
+        "Ferdi Kadıoğlu (LB/RB, Brighton)"
+      ],
+      "form": "Finished 2nd behind Spain in UEFA Group E (W4 D1 L1), then won the March playoff (1-0 vs Romania in the semifinal, Kadıoğlu from a Güler assist) to end the 24-year drought. Strong June prep: 4-0 vs North Macedonia, then a friendly vs Venezuela in Florida. Widely tipped as the most dangerous non-seed in Group D.",
+      "outlook": "+175 second favorite to win Group D (~36% implied); many pundits pick Turkey to advance with the US and view them as a live dark horse for the R16/QF given the attacking talent.",
+      "strength_tier": 2,
+      "elo_research": 1910
+    },
+    {
+      "team": "Paraguay",
+      "group": "D",
+      "coach": "Gustavo Alfaro - the vastly experienced Argentine (formerly Ecuador 2022, Costa Rica) ended Paraguay's 16-year World Cup absence with a battle-hardened, defense-first squad.",
+      "fifa_rank": 40,
+      "elo": 1770,
+      "style": "The most disciplined defensive unit to come out of CONMEBOL: compact, physical, low-scoring, built on set pieces and a Brazilian Serie A-hardened core (7 Brazil-based players, 4 MLS, 2 Premier League). They grind out 1-0s rather than dominate.",
+      "attack": "The obvious limitation: just 14 goals in 18 qualifiers, the lowest of any automatic CONMEBOL qualifier. Antonio Sanabria (Cremonese) had a breakout qualifying campaign, Miguel Almirón (Atlanta United) provides the main creativity, and Brighton's Diego Gómez, 23, is the rising star who scored the winner in the home upset of Brazil. Julio Enciso headlines the squad's flair.",
+      "defense": "Excellent: only 10 goals conceded in 18 qualifiers, one of the top three defensive records in CONMEBOL. Captain Gustavo Gómez (Palmeiras, 88+ caps) marshals the back line alongside in-form Sunderland defender Omar Alderete.",
+      "key_players": [
+        "Gustavo Gómez (CB, Palmeiras - captain)",
+        "Omar Alderete (CB, Sunderland)",
+        "Miguel Almirón (AM/W, Atlanta United)",
+        "Diego Gómez (CM, Brighton)",
+        "Julio Enciso (AM, Strasbourg)",
+        "Antonio Sanabria (ST, Cremonese)"
+      ],
+      "form": "Started qualifying with 1 point from 3 games, then became the form team of the second half of CONMEBOL qualifying - no side, not even Argentina, took more points over the final eight rounds, including home wins over both Argentina and Brazil. First World Cup since 2010.",
+      "outlook": "+400 to win Group D; widely seen as a nightmare draw for the favorites and a plausible plus-money group-winner play (SI flagged them as a value pick), but the lack of goals caps the ceiling around R32/R16.",
+      "strength_tier": 3,
+      "elo_research": 1800
+    },
+    {
+      "team": "United States",
+      "group": "D",
+      "coach": "Mauricio Pochettino - the former Tottenham/PSG/Chelsea boss took over in late 2024 and named a young 26-man roster (avg age ~26.9, 13 returnees from Qatar 2022) for the home World Cup.",
+      "fifa_rank": 16,
+      "elo": 1790,
+      "style": "Pochettino favors an aggressive, high-energy pressing game built around athletic midfielders (Adams, McKennie) and quick wide transitions through Pulisic and Weah. Execution has been inconsistent, with the team still searching for a settled best XI right up to the opener.",
+      "attack": "Christian Pulisic (84 caps) is the talisman and chief creator. The striker pool is in club form: Folarin Balogun scored 19 goals for Monaco in 2025-26, Ricardo Pepi 19 for PSV, and Haji Wright 17 in the Championship for promoted Coventry. Goals dried up in spring friendlies, though, with the US outscored 7-2 across the two March matches.",
+      "defense": "The shakiest area: set-piece defending and communication were flagged after the 2-2 warm-up draw with Germany, and the goalkeeper battle between Matt Freese (NYCFC) and Matt Turner went down to the wire, with Freese apparently ahead after starting the final tune-up. Antonee Robinson anchors the left but had a minor injury scare (cramp) in the Germany friendly. Elo had the US as low as 49th in Sept 2025 after a 2-0 loss to South Korea.",
+      "key_players": [
+        "Christian Pulisic (W/AM, AC Milan)",
+        "Tyler Adams (DM, Bournemouth)",
+        "Weston McKennie (CM, Juventus)",
+        "Folarin Balogun (ST, Monaco)",
+        "Antonee Robinson (LB, Fulham)",
+        "Matt Freese (GK, NYCFC)"
+      ],
+      "form": "Qualified automatically as co-host, so no competitive qualifying data. 2025-26 form was rocky (losses to South Korea and Portugal, outscored 7-2 in March friendlies) before a more encouraging June window: a friendly vs Senegal and a 2-2 draw with Germany. Pundits see a flawed but dangerous host riding home support.",
+      "outlook": "Bookmakers make the US +125 favorites to win Group D (~40% implied, down from 48% a month earlier) and roughly 60-1 for the title. Consensus: should reach the knockouts at home, with R16/QF the realistic ceiling.",
+      "strength_tier": 3,
+      "elo_research": 1770
+    },
+    {
+      "team": "Australia",
+      "group": "D",
+      "coach": "Tony Popovic - the former Socceroos defender took over in late 2024 and delivered direct qualification for the first time since 2014, blending veterans with 17 World Cup debutants.",
+      "fifa_rank": 27,
+      "elo": 1730,
+      "style": "Organized, physical, counter-attacking side that defends in a disciplined block and relies on set pieces and direct wide play; attacking limitations are openly acknowledged, but they are competitive against anyone, having reached the R16 in 2022.",
+      "attack": "The thin area: Australia's qualifying was built on narrow wins (1-0 vs Japan, 2-1 at Saudi Arabia via Metcalfe and Duke). Nestory Irankunda, 20, is the most explosive attacking talent they have had in years (5 goals in 14 caps), and Italy-convert Cristian Volpato adds creativity after a late allegiance switch.",
+      "defense": "The foundation of the team: captain Mathew Ryan goes to a record-tying fourth World Cup in goal, with experienced internationals Aziz Behich, Milos Degenek and Cameron Burgess in front of him. Kept things tight throughout AFC qualifying and drew a credible June friendly set including a match vs Switzerland (Elo gain +3, suggesting a positive result).",
+      "key_players": [
+        "Mathew Ryan (GK, captain)",
+        "Jackson Irvine (CM, St. Pauli)",
+        "Nestory Irankunda (W, Bayern Munich/loan)",
+        "Cristian Volpato (AM, Sassuolo)",
+        "Connor Metcalfe (CM, St. Pauli)",
+        "Mitchell Duke (ST)"
+      ],
+      "form": "Qualified directly as AFC Group C runners-up on 19 points (back-to-back wins over Indonesia and China, a pivotal 1-0 home win vs Japan, and a 2-1 win in Saudi Arabia) - first direct qualification since 2014. Positive June warm-up vs Switzerland. Pundits respect their know-how but rank them last or third in the group on talent.",
+      "outlook": "+850 outsiders to win Group D; consensus has them fighting Paraguay for third, with a best-third-place R32 berth the realistic target in the 48-team format.",
+      "strength_tier": 4,
+      "elo_research": 1760
+    },
+    {
+      "team": "Ecuador",
+      "group": "E",
+      "coach": "Sebastián Beccacece - the Argentine has built a highly organised, defense-first 4-4-2 and guided Ecuador to 2nd place in CONMEBOL qualifying ahead of Brazil and Uruguay.",
+      "fifa_rank": 23,
+      "elo": 1860,
+      "style": "Compact lines, aggressive rest-defence and quick counters rather than sustained dominance - a knockout-football blueprint. Ecuador edge opponents out in low-scoring games and were the best defensive team in world qualifying.",
+      "attack": "The one concern: just 14 goals in 18 qualifiers and no clear elite No. 9. Record scorer Enner Valencia captains at 36 in his final World Cup, Gonzalo Plata provides the wide threat, and teenager Kendry Páez (Chelsea) is the X-factor creator. They win 1-0, not 3-0.",
+      "defense": "Elite - the best defensive record on the planet in qualifying: 5 goals conceded in 18 games and 13 clean sheets; no opponent has scored twice against them since Copa America 2024. PSG's Willian Pacho and Arsenal's Piero Hincapié form the centre-back wall, with Joel Ordóñez (Club Brugge) and Pervis Estupiñán (AC Milan) alongside and Moisés Caicedo shielding.",
+      "key_players": [
+        "Moisés Caicedo (DM, Chelsea)",
+        "Willian Pacho (CB, PSG)",
+        "Piero Hincapié (CB, Arsenal)",
+        "Pervis Estupiñán (LB, AC Milan)",
+        "Kendry Páez (AM, Chelsea/loan)",
+        "Enner Valencia (ST, captain)"
+      ],
+      "form": "Finished 2nd in CONMEBOL with 29 points (8W 8D, losses only away to Argentina and Brazil), clinching early. Widely tagged the tournament's most fashionable dark horse - Opta, SI and multiple bookmaker previews highlight their defensive steel as built for tournament football.",
+      "outlook": "+350 second favorite in Group E and 40/1-100/1 for the title; consensus dark horse with a realistic QF ceiling if the attack produces - the popular pick to join Germany in the knockouts.",
+      "strength_tier": 2,
+      "elo_research": 1938
+    },
+    {
+      "team": "Germany",
+      "group": "E",
+      "coach": "Julian Nagelsmann - named his 26-man squad on May 21 with Joshua Kimmich as captain and a surprise recall of 40-year-old Manuel Neuer out of international retirement.",
+      "fifa_rank": 10,
+      "elo": 1940,
+      "style": "Possession-with-verticality under Nagelsmann: control through Kimmich and Pavlovic, with the creative burden on the twin 23-year-old No. 10s Wirtz and Musiala. Deep, balanced squad mixing elite youth with veterans Rüdiger and Neuer.",
+      "attack": "Florian Wirtz (Liverpool, record transfer in 2025) and Jamal Musiala (recovered from the broken leg/dislocated ankle suffered at the July 2025 Club World Cup) headline. Kai Havertz adds quality, and Deniz Undav was the top German scorer in the Bundesliga in 2025-26 with 19 goals for Champions League-bound Stuttgart.",
+      "defense": "Solid spine with Antonio Rüdiger and Jonathan Tah at the back and Neuer's surprise return in goal at 40 (the oldest-keeper storyline of the tournament). Conceded little in a qualifying group they eased through with five wins from six. A 2-2 friendly draw with the USA in June showed they can still be got at in transition.",
+      "key_players": [
+        "Florian Wirtz (AM, Liverpool)",
+        "Jamal Musiala (AM, Bayern Munich)",
+        "Joshua Kimmich (CM/RB, Bayern Munich - captain)",
+        "Kai Havertz (ST, Arsenal)",
+        "Antonio Rüdiger (CB, Real Madrid)",
+        "Manuel Neuer (GK, Bayern Munich)"
+      ],
+      "form": "Cruised through UEFA qualifying (5 wins in 6). Musiala's fitness has been the main 2025-26 storyline, with Nagelsmann saying he is 'getting better and better'. Mixed June prep (2-2 vs USA) but pundits universally rate Germany as the class of Group E and a top-6 tournament contender.",
+      "outlook": "-290 to win Group E and around 14-1 for the title (behind Spain +450, France +475, England, Portugal, Argentina, Brazil). Consensus: comfortable group winners, fringe title contender - QF/SF expected.",
+      "strength_tier": 1,
+      "elo_research": 1932
+    },
+    {
+      "team": "Ivory Coast",
+      "group": "E",
+      "coach": "Emerse Faé - the 2023 AFCON-winning coach (famously appointed mid-tournament and winning it) leads the Elephants to their first World Cup since 2014.",
+      "fifa_rank": 34,
+      "elo": 1750,
+      "style": "Athletic, talent-rich team with one of the youngest, most exciting attacking cores at the tournament; strong spine, direct wing play, and the AFCON-champion knack for finding results. Analytics sites argue they are meaningfully underrated by the FIFA ranking.",
+      "attack": "Amad Diallo (Manchester United) is the headline creator, with 19-year-old RB Leipzig winger Yan Diomande (20 goal contributions in 33 games, Bundesliga Rookie of the Year) the breakout name and Inter's Ange-Yoan Bonny preferred up front after Sébastien Haller was left out. +25 goal difference in qualifying was the best in Africa.",
+      "defense": "Very strong on paper: Evan Ndicka (Roma), Ousmane Diomande (Sporting) and Wilfried Singo (Galatasaray) form one of the better African back lines, behind the experienced midfield shield of captain Franck Kessié (100+ caps) and Jean Seri. Unbeaten with only a handful of goals conceded in CAF qualifying.",
+      "key_players": [
+        "Franck Kessié (CM, captain)",
+        "Amad Diallo (W/AM, Manchester United)",
+        "Yan Diomande (W, RB Leipzig)",
+        "Evan Ndicka (CB, Roma)",
+        "Ousmane Diomande (CB, Sporting CP)",
+        "Wilfried Singo (CB/RB, Galatasaray)"
+      ],
+      "form": "Topped CAF Group F unbeaten (8W 2D, +25 GD). Won AFCON 2023 on home soil; squad is deep in young European-based talent. Pundits see the Ecuador match as a de facto playoff for second in Group E.",
+      "outlook": "+650 in Group E; consensus is a genuine coin-flip with Ecuador for second place - advancing to the R32/R16 is the realistic target, with upset potential beyond.",
+      "strength_tier": 3,
+      "elo_research": 1695
+    },
+    {
+      "team": "Curaçao",
+      "group": "E",
+      "coach": "Dick Advocaat - at 78 the Dutch veteran becomes the oldest coach ever at a World Cup, taking his third different nation to the finals after the Netherlands and South Korea.",
+      "fifa_rank": 82,
+      "elo": 1540,
+      "style": "Pragmatic, well-drilled Dutch-school side: organized defensive block, experienced Eredivisie/Championship-based core, and reliance on structure over individual quality. The smallest nation (pop. ~156,000) ever to reach a World Cup, breaking Iceland's record.",
+      "attack": "Limited by tournament standards. Sheffield United winger Tahith Chong (ex-Manchester United academy) is the main attacking weapon; captain Leandro Bacuna, 34, is the second-highest scorer in the country's history. Goals will be hard to come by against Group E defenses.",
+      "defense": "The unit that got them here: unbeaten through CONCACAF qualifying including a shutout draw in Kingston to clinch, with veteran keeper Eloy Room (co-most-capped player) providing experience. Still, the individual-quality gap to Germany, Ecuador and Ivory Coast is the widest of any Group E pairing.",
+      "key_players": [
+        "Leandro Bacuna (MF, captain)",
+        "Tahith Chong (W, Sheffield United)",
+        "Eloy Room (GK)",
+        "Juninho Bacuna (MF, Birmingham City)",
+        "Armando Obispo (CB, PSV)",
+        "Kenji Gorré (W)"
+      ],
+      "form": "Historic qualification: won all four games in the first CONCACAF group phase, then went unbeaten (3W 3D, 12 points) above Jamaica and Trinidad & Tobago in the final round. Momentum and a feel-good story, but friendlies (e.g. vs Scotland) confirm the level gap.",
+      "outlook": "+12500 to win the group - bookmakers and pundits treat them as a celebrated novelty; anything other than fourth place would be a major shock, with a single point seen as success.",
+      "strength_tier": 5,
+      "elo_research": 1434
+    },
+    {
+      "team": "Netherlands",
+      "group": "F",
+      "coach": "Ronald Koeman - in his second spell, he led an unbeaten qualifying campaign and has a settled, balanced squad despite late injuries to Jurriën Timber (groin, out) and Xavi Simons (ACL, out).",
+      "fifa_rank": 8,
+      "elo": 1960,
+      "style": "Classic Dutch possession 4-3-3 with a physically dominant spine (Van Dijk, De Jong) and fluid front line; comfortable controlling games and ruthless against mid-tier sides, as 27 goals in 8 qualifiers showed.",
+      "attack": "Memphis Depay, now the Oranje's all-time top scorer (past Van Persie), leads the line with Cody Gakpo in excellent national-team form; Tijjani Reijnders and Frenkie de Jong drive from midfield. Scored 27 in 8 unbeaten qualifiers. Xavi Simons' ACL rupture 47 days out removed one creative option.",
+      "defense": "Virgil van Dijk still anchors one of the more reliable defenses at the tournament; Timber's withdrawal (replaced by Lutsharel Geertruida) thins the right side. Unbeaten in qualifying with one of Europe's best goals-against records; Bart Verbruggen is the established young No. 1.",
+      "key_players": [
+        "Virgil van Dijk (CB, Liverpool - captain)",
+        "Memphis Depay (ST, all-time top scorer)",
+        "Cody Gakpo (W, Liverpool)",
+        "Frenkie de Jong (CM, Barcelona)",
+        "Tijjani Reijnders (CM, Manchester City)",
+        "Bart Verbruggen (GK, Brighton)"
+      ],
+      "form": "Unbeaten in qualifying, 27 goals in 8 games. Opta gives them 48.2% to win Group F and 88.2% to advance. Pundit consensus: clear group favorites and a second-tier title contender at ~20-1, with the usual question of whether they can beat the elite when it matters.",
+      "outlook": "-125 to win Group F and -1110 to qualify; consensus QF-or-better expectation and a plausible SF dark horse - tier just below the Spain/France/England group.",
+      "strength_tier": 1,
+      "elo_research": 1948
+    },
+    {
+      "team": "Japan",
+      "group": "F",
+      "coach": "Hajime Moriyasu - in his second World Cup in charge after the Qatar 2022 group-stage wins over Germany and Spain, openly targeting Japan's first-ever quarterfinal.",
+      "fifa_rank": 18,
+      "elo": 1860,
+      "style": "Flexible 3-4-2-1/4-2-3-1 pressing side with elite squad depth across European leagues; devastating in transition and tactically brave, as shown by 2022's giant-killing and 2025-26 away wins at Scotland and England.",
+      "attack": "Takefusa Kubo (Real Sociedad) is the creative hub, with Ritsu Doan (six goals by the March break at his new club) and Keito Nakamura the main threats. Significant blow: Kaoru Mitoma and Takumi Minamino are out injured. Scoring depth remains good by Asian standards but thinner than the 2023-25 peak.",
+      "defense": "Solid and well-organized: Ko Itakura and Hiroki Ito marshal the back line with Liverpool's Wataru Endo screening as captain. Japan dominated AFC qualifying (clinching earliest of anyone) and concede rarely against non-elite opposition; Hidemasa Morita's absence costs midfield control.",
+      "key_players": [
+        "Takefusa Kubo (AM/W, Real Sociedad)",
+        "Wataru Endo (DM, Liverpool - captain)",
+        "Ritsu Doan (W, Eintracht Frankfurt)",
+        "Ko Itakura (CB, Ajax)",
+        "Daichi Kamada (AM, Crystal Palace)",
+        "Keito Nakamura (W/ST, Reims)"
+      ],
+      "form": "Cruised through AFC qualifying, then beat Scotland and England away in the final pre-tournament windows - elite momentum. Elo rates them far above their FIFA rank (top-12 by Elo at ~1906). Widely named the tournament's leading non-UEFA/CONMEBOL dark horse, chasing a first QF after four R16 exits.",
+      "outlook": "+275/+300 second favorite in Group F, -375 to qualify, with 76% advancement probability per Opta; consensus dark horse capable of R16/QF and of pushing the Netherlands for top spot.",
+      "strength_tier": 2,
+      "elo_research": 1906
+    },
+    {
+      "team": "Sweden",
+      "group": "F",
+      "coach": "Graham Potter - the Englishman took over after the disastrous group campaign and won the March playoff; this is his first major international tournament as a manager.",
+      "fifa_rank": 38,
+      "elo": 1760,
+      "style": "Potter has stabilized a talented but underperforming squad into a more structured, counter-attacking shape built to service the elite front two of Isak and Gyökeres; still a work in progress with a short runway.",
+      "attack": "On paper among the best strike pairings at the World Cup: Viktor Gyökeres (Arsenal) - who scored the late playoff winner vs Poland - and Alexander Isak (Liverpool), though Isak had an injury-hit season with only eight league starts after his record move. Anthony Elanga, Yasin Ayari and Lucas Bergvall add pace and creativity.",
+      "defense": "The questionable end: the qualifying group return of just 2 points without a win reflected defensive and structural problems, and Elo ranks them only ~42nd. Victor Lindelöf (Aston Villa) brings the main experience at centre-back; the unit improved during the November-March Potter window but is untested at this level.",
+      "key_players": [
+        "Alexander Isak (ST, Liverpool)",
+        "Viktor Gyökeres (ST, Arsenal)",
+        "Anthony Elanga (W, Newcastle)",
+        "Lucas Bergvall (CM, Tottenham)",
+        "Yasin Ayari (CM, Brighton)",
+        "Victor Lindelöf (CB, Aston Villa)"
+      ],
+      "form": "Nearly catastrophic cycle: 2 points and zero wins in their qualifying group, rescued only by the Nations League-route playoff - beating Ukraine then Poland (late Gyökeres winner) in March to reach a first World Cup since 2018. Momentum is real but shallow; pundits are split on whether the talent or the qualifying form is the truth.",
+      "outlook": "+400/+500 in Group F and -200 to qualify (~63% per Opta); consensus coin-flip with Japan for second - R32 expected, R16 possible if Isak hits form.",
+      "strength_tier": 3,
+      "elo_research": 1720
+    },
+    {
+      "team": "Tunisia",
+      "group": "F",
+      "coach": "Sabri Lamouchi - appointed January 14, 2026 (to 2028) after Sami Trabelsi was dismissed following the AFCON R16 penalty loss to Mali; Lamouchi previously took Ivory Coast to the 2014 World Cup.",
+      "fifa_rank": 44,
+      "elo": 1700,
+      "style": "Deep-block, clean-sheet football: Tunisia qualified without conceding a single goal - a World Cup first - and rely on midfield discipline through Skhiri, set pieces and quick breaks via the wing-backs Valery and Abdi. Low-scoring by design.",
+      "attack": "The weakness: modest goal output against quality opposition, and a 1-0-type ceiling. Hannibal Mejbri is the star creator, with wide threat from Ali Abdi and Yan Valery; veteran finishing is thin. Lost a June warm-up to Belgium (Elo -5).",
+      "defense": "Historically good in qualifying: 9 wins and a draw with zero goals conceded (first nation ever to qualify unconceded), with Montassar Talbi and Dylan Bronn the experienced centre-backs and captain Ellyes Skhiri screening. The question is whether it survives Netherlands/Japan-level attack.",
+      "key_players": [
+        "Ellyes Skhiri (DM, captain)",
+        "Hannibal Mejbri (AM, Burnley)",
+        "Montassar Talbi (CB, Lorient)",
+        "Dylan Bronn (CB)",
+        "Ali Abdi (LB/W, Nice)",
+        "Yan Valery (RB/W)"
+      ],
+      "form": "Dominant CAF qualifying (9W 1D, 0 goals conceded, sealed in Sept 2025), but momentum broke with the AFCON R16 exit to Mali and the coaching change in January; Lamouchi made bold squad cuts (Ben Romdhane omitted) and lost the June friendly vs Belgium. Only six Qatar 2022 squad survivors.",
+      "outlook": "+1100/+1200 group outsider, +140 to qualify (~43% per Opta); consensus fourth pick in a balanced group, but the defensive floor makes a best-third-place R32 spot a live possibility.",
+      "strength_tier": 4,
+      "elo_research": 1638
+    },
+    {
+      "team": "Belgium",
+      "group": "G",
+      "coach": "Rudi Garcia - appointed January 2025, his first international job after club spells at Lille, Roma, Marseille, Lyon, Al-Nassr and Napoli; managing a generational transition while keeping veterans central.",
+      "fifa_rank": 9,
+      "elo": 1860,
+      "style": "Possession-based with experienced spine; Garcia balances the old guard (De Bruyne, Lukaku, Courtois) with younger wide attackers. Capable of high-quality build-up but has shown defensive lapses against mid-tier sides.",
+      "attack": "Kevin De Bruyne (34) remains the creative heartbeat; Romelu Lukaku, Belgium's all-time top scorer with 89 international goals, made the squad despite an injury-wrecked Napoli season (~1 hour of competitive football), so his fitness is the big question. Doku/Trossard-type wide runners and captain Youri Tielemans (scored in the 2026 Europa League final win) supplement; De Bruyne netted the winner in a wild 4-3 qualifying victory over Wales.",
+      "defense": "Thibaut Courtois remains one of the world's best goalkeepers and a huge equalizer. The back line is aging/in transition and was breached repeatedly in qualifying, including blowing a three-goal lead against Wales. Solid but no longer elite collectively.",
+      "key_players": [
+        "Kevin De Bruyne (AM, Napoli)",
+        "Thibaut Courtois (GK, Real Madrid)",
+        "Romelu Lukaku (ST, Napoli)",
+        "Youri Tielemans (CM, Aston Villa, captain)",
+        "Jeremy Doku (W, Manchester City)",
+        "Leandro Trossard (W, Arsenal)"
+      ],
+      "form": "Won UEFA qualifying Group J unbeaten (5W 3D) over Wales, North Macedonia, Kazakhstan and Liechtenstein - unbeaten in WC qualifying since 2009, but with a sluggish start (draw vs North Macedonia). Garcia steadied the side after a rocky Nations League start in early 2025. Pundit consensus: clear class of Group G but not a top-tier title threat.",
+      "outlook": "Heavy -250 group favorite (-2500 to reach R32) and expected to top Group G comfortably; consensus sees them as a possible QF side rather than a genuine title contender in this transition cycle.",
+      "strength_tier": 2,
+      "elo_research": 1736
+    },
+    {
+      "team": "Egypt",
+      "group": "G",
+      "coach": "Hossam Hassan - legendary ex-Al Ahly striker and Egypt's all-time joint scoring great (69 goals), in charge since 2024; pragmatic, counter-oriented approach built around Salah.",
+      "fifa_rank": 29,
+      "elo": 1750,
+      "style": "Compact, defensively disciplined unit that funnels attacks through Mohamed Salah on the right and Marmoush's movement; comfortable ceding possession and striking on transitions and set pieces.",
+      "attack": "Mohamed Salah captains and is two goals from breaking Hossam Hassan's national record of 69; he scored 9 goals in qualifying including 4 vs Djibouti in a 6-0 win. Omar Marmoush (Manchester City) had a breakthrough club season and partners him, with Trezeguet as the experienced third piece and 18-year-old Hamza Abdel Karim (Barcelona Atletic) a wildcard call-up.",
+      "defense": "Outstanding defensively in qualifying: just 2 goals conceded in 10 unbeaten matches. Nice centre-back Mohamed Abdelmonem anchors the line; veteran 37-year-old Mohamed El Shenawy (Al Ahly) commands the box and kept 2 clean sheets in 3 AFCON 2025 group games. Concern is pace against elite attackers.",
+      "key_players": [
+        "Mohamed Salah (RW, Liverpool, captain)",
+        "Omar Marmoush (FW, Manchester City)",
+        "Mohamed Abdelmonem (CB, Nice)",
+        "Mohamed El Shenawy (GK, Al Ahly)",
+        "Mahmoud 'Trezeguet' Hassan (W, Trabzonspor)",
+        "Hamza Abdel Karim (FW, Barcelona Atletic, on loan from Al Ahly)"
+      ],
+      "form": "Topped CAF Group A with 26 points, unbeaten (8W 2D), conceding only twice. Solid AFCON 2025 showing with strong defensive numbers. Momentum is good and Salah's motivation is repeatedly cited; bookmakers make Egypt the slight favorite over Iran for second in Group G (+400 group, -275 to qualify).",
+      "outlook": "Consensus pick to finish second behind Belgium and reach the knockouts for the first time; chasing a first-ever quarter-final but R32/R16 is the realistic ceiling.",
+      "strength_tier": 3,
+      "elo_research": 1632
+    },
+    {
+      "team": "Iran",
+      "group": "G",
+      "coach": "Amir Ghalenoei - in his second spell (appointed March 2023, previously 2006-07); favours a compact 4-2-3-1 that prioritises defensive shape before springing Taremi and the wide players.",
+      "fifa_rank": 21,
+      "elo": 1760,
+      "style": "Compact mid-to-low block, direct transitions and strong set pieces; defence-first 4-2-3-1 designed to frustrate and then release Taremi and the wingers. Capable of troubling any side in this group.",
+      "attack": "Mehdi Taremi (33, Olympiacos) is the talisman at his third World Cup, scoring 10 goals in 15 games during qualifying. Alireza Jahanbakhsh and Saman Ghoddos provide experience around him; Sardar Azmoun was a notable omission from the final 26. Goals beyond Taremi are the worry.",
+      "defense": "Traditional strength: veteran keeper Alireza Beiranvand and an organized, physical back line marshalled with Rouzbeh Cheshmi in front. Won 7 of 10 qualifiers to top their AFC group, conceding little. Vulnerable mainly to sustained pressure from elite attacks.",
+      "key_players": [
+        "Mehdi Taremi (ST, Olympiacos)",
+        "Alireza Beiranvand (GK, Persepolis)",
+        "Alireza Jahanbakhsh (W, --)",
+        "Saman Ghoddos (AM, --)",
+        "Rouzbeh Cheshmi (DM/CB, Esteghlal)",
+        "Mohammad Mohebi (W, --)"
+      ],
+      "form": "Strong AFC qualifying campaign (7 wins in 10, topped the group, qualified automatically) for a fourth straight finals. 2025-26 friendlies were mixed and there is some uncertainty around the side per pundits, who rate Egypt narrowly ahead for second place (Iran +600 group, -175 to qualify for R32).",
+      "outlook": "Realistic aim is the Group G runner-up spot or a best-third-place R32 berth; Iran have never escaped a World Cup group in six tries, and consensus has them in a coin-flip with Egypt for second.",
+      "strength_tier": 3,
+      "elo_research": 1620
+    },
+    {
+      "team": "New Zealand",
+      "group": "G",
+      "coach": "Darren Bazeley - head coach since 2023, former Watford/Wolves defender; pragmatic, organized, direct approach built entirely around Chris Wood.",
+      "fifa_rank": 85,
+      "elo": 1590,
+      "style": "Compact 4-4-2/4-2-3-1 that defends deep, wins the ball quickly and goes direct and early into Chris Wood as target and focal point; no high press or intricate build-up against stronger teams.",
+      "attack": "Chris Wood - captain, record cap-holder and record scorer - is the entire attacking plan; his 20-goal Premier League season for Nottingham Forest in 2024/25 showed he remains elite as a target striker. Support (Sarpreet Singh, Ben Waine types) is modest, mostly from smaller European leagues, A-League and MLS. Goals beyond Wood are scarce.",
+      "defense": "Conceded just one goal across the entire OFC qualifying campaign (5 wins from 5), but against minimal opposition. The unit is well-drilled and committed, with Michael Boxall's experience at the back, yet there is a major class gap against top-30 attacks.",
+      "key_players": [
+        "Chris Wood (ST, Nottingham Forest, captain)",
+        "Liberato Cacace (LB, Empoli)",
+        "Marko Stamenic (CM, --)",
+        "Michael Boxall (CB, Minnesota United)",
+        "Sarpreet Singh (AM, --)",
+        "Matthew Garbett (CM, --)"
+      ],
+      "form": "Swept OFC qualifying 5-0-0 conceding once, but has faced little top-level opposition since; friendlies against stronger sides have been the only real tests. Pundit consensus rates the All Whites as one of the weakest squads at the tournament; -200 to finish last in Group G (+1800 to win it, +190 to advance).",
+      "outlook": "Consensus minnow: target is a first-ever World Cup knockout appearance via a best-third-place finish, with the Iran opener seen as their one genuinely winnable match.",
+      "strength_tier": 5,
+      "elo_research": 1562
+    },
+    {
+      "team": "Spain",
+      "group": "H",
+      "coach": "Luis de la Fuente - Euro 2024 winner who has built a positional-play machine; made headlines by naming a 26 with eight Barcelona players and zero Real Madrid representatives.",
+      "fifa_rank": 2,
+      "elo": 2170,
+      "style": "Elite positional possession football with relentless pressing; the deepest midfield pool in the world (Rodri, Pedri, Gavi, Zubimendi) plus devastating wide play from Lamine Yamal and Nico Williams.",
+      "attack": "Lamine Yamal (18) is arguably the world's most dangerous attacker, though a hamstring injury suffered in late April makes him a doubt for the opening matches. Nico Williams, Dani Olmo, Ferran Torres and Mikel Oyarzabal share the goals - Spain scored 21 in 6 qualifiers - with Pedri orchestrating. Scoring is spread across the XI rather than reliant on a single striker.",
+      "defense": "Conceded just 2 goals in qualifying; Unai Simon kept 5 clean sheets in 6 and ranked first among UEFA keepers. Pau Cubarsi, Le Normand and Eric Garcia (no Real Madrid defenders) protect a high line shielded by Rodri/Zubimendi. The only blemish was the closing 2-2 vs Turkiye.",
+      "key_players": [
+        "Lamine Yamal (RW, Barcelona)",
+        "Pedri (CM, Barcelona)",
+        "Rodri (DM, Manchester City)",
+        "Nico Williams (LW, Athletic Club)",
+        "Unai Simon (GK, Athletic Club)",
+        "Dani Olmo (AM, Barcelona)"
+      ],
+      "form": "Unbeaten in a national-record 31 straight games entering the tournament; reigning European champions, topped qualifying Group E unbeaten (5W 1D, 21-2), with the only recent 'defeat' a penalty shootout loss to Portugal after a 2-2 Nations League final draw in June 2025. Pundit consensus: the best team in the world on paper.",
+      "outlook": "Tournament favorites (around +475/+506, ~16% in prediction markets, essentially co-favorites with France); expected to win Group H at a canter, with Yamal's fitness the only meaningful caveat.",
+      "strength_tier": 1,
+      "elo_research": 1875
+    },
+    {
+      "team": "Uruguay",
+      "group": "H",
+      "coach": "Marcelo Bielsa - iconic high-press idealist (3-3-3-1 heritage, 'best manager in the world' per Guardiola in 2012) leading La Celeste to a fifth straight World Cup amid a generational handover.",
+      "fifa_rank": 17,
+      "elo": 1870,
+      "style": "Bielsa-ball: aggressive man-oriented pressing, vertical quick passing and high tempo, but output has been streaky - dominant against elites on good days, blunt against blocks. Defensively robust through an elite centre-back pairing.",
+      "attack": "Darwin Nunez leads the line despite scant club minutes (hasn't played for Al Hilal since February) - a real fitness gamble after Luis Suarez was omitted (first WC without him since 2010). Nunez top-scored in qualifying with just 5 in 18; Valverde's long-range threat, de Arrascaeta's creativity and young wingers (Pellistri, Maximo Araujo) supplement. Uruguay failed to score in 8 of their final 12 qualifiers - goal supply is the central worry.",
+      "defense": "Ronald Araujo and Jose Maria Gimenez form one of the world's elite centre-back pairings, giving Bielsa rare defensive comfort. 39-year-old Fernando Muslera returned from international retirement for a record fifth World Cup. Conceded little in qualifying; set-piece defense is strong.",
+      "key_players": [
+        "Federico Valverde (CM, Real Madrid)",
+        "Ronald Araujo (CB, Barcelona)",
+        "Darwin Nunez (ST, Al-Hilal)",
+        "Jose Maria Gimenez (CB, Atletico Madrid)",
+        "Giorgian de Arrascaeta (AM, Flamengo)",
+        "Fernando Muslera (GK, Estudiantes)"
+      ],
+      "form": "Finished 4th in CONMEBOL qualifying (28 pts, 7W 7D 4L), with marquee early wins away to Argentina and vs Brazil but a flat 2025 (scoreless in 8 of the last 12 qualifiers), sealing qualification with a 3-0 over Peru. Pundits see a dangerous but inconsistent side capable of springing shocks.",
+      "outlook": "Consensus second in Group H behind Spain and a live R16/QF dark horse if Nunez is fit and the attack clicks; not among the title favorites (roughly +2500-+4000 range).",
+      "strength_tier": 2,
+      "elo_research": 1671
+    },
+    {
+      "team": "Cape Verde",
+      "group": "H",
+      "coach": "Bubista (Pedro Leitao Brito) - in charge since 2020, CAF Coach of the Year 2025; pragmatic organizer with a 48% win rate who masterminded the islands' historic first qualification.",
+      "fifa_rank": 69,
+      "elo": 1570,
+      "style": "Compact, disciplined defensive shape, hard to break down and dangerous on the counter; Bubista does not ask the squad to play beyond its collective ability and leans on diaspora-built cohesion and spirit.",
+      "attack": "Captain Ryan Mendes (36), the nation's record cap-holder and scorer, leads the line in what is likely his only World Cup. Garry Rodrigues and Willy Semedo provide counter-attacking pace; output is modest and chances against top sides will be rare - set pieces and breaks are the route to goals.",
+      "defense": "Villarreal centre-back Logan Costa is the standout and the only player from Europe's top five leagues. The unit was excellent in CAF qualifying (won a group ahead of Cameroon and Angola, conceding very few), with keeper Vozinha experienced, but the level gap against Spain and Uruguay is severe.",
+      "key_players": [
+        "Logan Costa (CB, Villarreal)",
+        "Ryan Mendes (FW, --, captain)",
+        "Garry Rodrigues (W, --)",
+        "Vozinha (GK, --)",
+        "Jamiro Monteiro (CM, --)",
+        "Willy Semedo (FW, --)"
+      ],
+      "form": "Won their CAF qualifying group (ahead of Cameroon) to qualify directly for a first-ever World Cup - the second least-populous nation ever to qualify (~525,000 people) after Iceland 2018. AFCON 2025 participation kept them battle-tested. Consensus: clear fourth seed in quality terms but the gap to Saudi Arabia is small.",
+      "outlook": "Heavy outsider expected to finish bottom or third; the Saudi Arabia match is the realistic points target, and anything beyond a best-third-place R32 berth would be a massive shock.",
+      "strength_tier": 5,
+      "elo_research": 1578
+    },
+    {
+      "team": "Saudi Arabia",
+      "group": "H",
+      "coach": "Georgios Donis - emergency appointment on 24 April 2026 (seven weeks before the tournament) after Herve Renard was sacked on 17 April following back-to-back March friendly defeats; known for disciplined, organised football from his Al-Khaleej spell.",
+      "fifa_rank": 61,
+      "elo": 1630,
+      "style": "Under Donis expect a tactically disciplined, deep-block, counter-attacking setup with Al-Dawsari's left-sided dribbling the main outlet; the late coaching change leaves the tactical identity unsettled.",
+      "attack": "Captain Salem Al-Dawsari (108 caps, 26 goals, third World Cup) is the creative spark and big-game scorer (scored vs Argentina in 2022). Firas Al-Buraikan led the team with 5 goals in AFC qualifying. Overall scoring is thin - they advanced from the fourth qualifying round only on goals scored.",
+      "defense": "An almost entirely Roshn Saudi League-based squad (25 of 26 domestic; RC Lens' Saud Abdulhamid the exception). Organized but beatable: finished only third in their AFC third-round group behind Japan and Australia. Goalkeeping and back-line athleticism are adequate at Asian level, stretched against elite attacks.",
+      "key_players": [
+        "Salem Al-Dawsari (LW, Al-Hilal, captain)",
+        "Firas Al-Buraikan (ST, Al-Ahli)",
+        "Saud Abdulhamid (RB, RC Lens)",
+        "Mohammed Kanno (CM, Al-Hilal)",
+        "Hassan Al-Tambakti (CB, Al-Hilal)",
+        "Nawaf Al-Aqidi (GK, Al-Nassr)"
+      ],
+      "form": "Laboured qualification: third in the AFC third-round group, then won a fourth-round group over Iraq and Indonesia on goals scored. Back-to-back friendly defeats in March 2026 cost Renard his job, and the seven-weeks-out coaching change is a major red flag for momentum and cohesion at their seventh World Cup.",
+      "outlook": "Consensus third/fourth in Group H; the Cape Verde fixture is effectively a playoff for third, and reaching the R32 even as a best third-placed team is viewed as unlikely.",
+      "strength_tier": 4,
+      "elo_research": 1569
+    },
+    {
+      "team": "France",
+      "group": "I",
+      "coach": "Didier Deschamps - in charge since 2012 (2018 champion, 2022 finalist) and has confirmed this World Cup will be his last with Les Bleus.",
+      "fifa_rank": 1,
+      "elo": 2060,
+      "style": "Pragmatic, transition-lethal 4-3-3/4-2-3-1: solid mid-block, elite athletes in every line, and devastating pace through Mbappe, Dembele and Olise. Deschamps prioritizes balance and tournament management over dominance of possession.",
+      "attack": "Arguably the deepest attack in the tournament: captain Kylian Mbappe (12 career WC goals, chasing Klose's record 16, back to top form at Real Madrid), reigning Ballon d'Or winner Ousmane Dembele, and Bayern's sensational Michael Olise, who knocked Real Madrid out of the CL quarterfinals. Multiple 1v1 winners and elite depth off the bench.",
+      "defense": "William Saliba is a rock at centre-back, flanked by Dayot Upamecano's pace and Jules Kounde at right-back - a top-three defensive unit on paper. Goalkeeping (Maignan) is strong. Conceded very little in a comfortable qualifying campaign.",
+      "key_players": [
+        "Kylian Mbappe (ST/LW, Real Madrid, captain)",
+        "Ousmane Dembele (FW, PSG)",
+        "Michael Olise (RW, Bayern Munich)",
+        "William Saliba (CB, Arsenal)",
+        "Jules Kounde (RB, Barcelona)",
+        "Mike Maignan (GK, AC Milan)"
+      ],
+      "form": "Enter as FIFA world No. 1 (1,877 pts, April 2026) after a comfortable unbeaten qualifying campaign; the squad blends Ballon d'Or-level talent with 2018 survivors. Momentum and depth are excellent and Deschamps' farewell adds motivation. Pundit consensus: co-favorites with Spain.",
+      "outlook": "Co-favorites (~+500, ~16% in prediction markets) and strong favorites (-250) to win Group I; consensus expects at least a semi-final, with a third straight final a live possibility.",
+      "strength_tier": 1,
+      "elo_research": 1871
+    },
+    {
+      "team": "Norway",
+      "group": "I",
+      "coach": "Stale Solbakken - in charge since 2020 and widely expected to step down after the tournament; built a ruthlessly efficient transition machine around Haaland and Odegaard.",
+      "fifa_rank": 31,
+      "elo": 1850,
+      "style": "Direct, vertical 4-3-3/4-4-2 built on fast transitions, Odegaard's right-half-space creation and relentless service to Haaland; pragmatic without the ball, devastating in space. Far more than a one-man team now (Sorloth, Nusa, Bobb in support).",
+      "attack": "Erling Haaland scored a staggering 16 goals in 8 qualifiers (2 per game); Alexander Sorloth is an elite second striker/plan B and Martin Odegaard, fresh off a Premier League title with Arsenal, contributed 7 assists in qualifying. 37 goals in 8 qualifying matches (4.6 per game) led all of Europe.",
+      "defense": "Conceded just 5 goals in 8 qualifiers (0.63 per game). The unit (Ostigard/Heggem at CB, Wolves' Johan Hjulmand-type screeners in Berge/Berg, Nyland in goal) is functional rather than elite - the clear weak link relative to the attack, and untested against top-five-level forwards in tournament conditions.",
+      "key_players": [
+        "Erling Haaland (ST, Manchester City)",
+        "Martin Odegaard (AM, Arsenal, captain)",
+        "Alexander Sorloth (ST, Atletico Madrid)",
+        "Antonio Nusa (LW, RB Leipzig)",
+        "Sander Berge (CM, Fulham)",
+        "Oscar Bobb (W, Manchester City)"
+      ],
+      "form": "Perfect qualifying: 8 wins from 8, 37-5 goal difference, including 3-0 and 4-1 wins over Italy - first World Cup since 1998. The 'Viking' squad arrives on a huge wave of momentum and is the most-cited dark horse in punditry (FourFourTwo's No. 1 dark horse; +3000 outright, -900 to advance, +275 to win the group).",
+      "outlook": "Consensus dark horse: strong second-favorite in Group I behind France (their June 26 Boston meeting may decide top spot) with QF-or-better upside if Haaland fires; tier-2 by odds despite the modest FIFA rank of 31.",
+      "strength_tier": 2,
+      "elo_research": 1746
+    },
+    {
+      "team": "Senegal",
+      "group": "I",
+      "coach": "Pape Thiaw - former international appointed December 2024 after Aliou Cisse; has kept Senegal unbeaten through CAF qualifying and took them to the AFCON 2025 final.",
+      "fifa_rank": 14,
+      "elo": 1830,
+      "style": "Athletic, physically dominant 4-3-3 with a strong press and rapid wide transitions through Mane and Ismaila Sarr; among the most complete and deepest African squads ever assembled.",
+      "attack": "Sadio Mane (34, his declared final World Cup) remains the talisman and top-scored in qualifying with 5; Ismaila Sarr brings pace and end product after Crystal Palace's FA Cup and European success, with Nicolas Jackson, Iliman Ndiaye and Pape Matar Sarr giving real depth. Scoring is well-distributed.",
+      "defense": "Elite spine: Edouard Mendy in goal, captain Kalidou Koulibaly (34) anchoring, and Idrissa Gana Gueye (36, 130 caps) still screening the back four. Conceded only 3 goals in 10 unbeaten qualifiers; one of the best defensive records of any qualifier.",
+      "key_players": [
+        "Sadio Mane (LW, Al-Nassr)",
+        "Kalidou Koulibaly (CB, Al-Hilal, captain)",
+        "Edouard Mendy (GK, Al-Ahli)",
+        "Ismaila Sarr (RW, Crystal Palace)",
+        "Pape Matar Sarr (CM, Tottenham)",
+        "Nicolas Jackson (ST, --)"
+      ],
+      "form": "Unbeaten through CAF qualifying (7W 3D, 3 goals conceded in 10) and AFCON 2025 finalists, riding a 14-game AFCON unbeaten streak. Momentum and confidence are high; widely tipped as Africa's strongest hope alongside Morocco.",
+      "outlook": "Consensus second in Group I and a genuine dark horse for the quarter-finals; the opener vs France on June 16 in New Jersey effectively decides the group winner.",
+      "strength_tier": 2,
+      "elo_research": 1689
+    },
+    {
+      "team": "Iraq",
+      "group": "I",
+      "coach": "Graham Arnold - ex-Australia boss hired May 2025 with qualification hanging by a thread; simplified the approach, stabilized selection and even banned social media on duty to shield players from pressure.",
+      "fifa_rank": 57,
+      "elo": 1610,
+      "style": "Compact mid-block in a 4-2-3-1/4-3-3 that counters with two strikers and early crosses when possible; Arnold can toggle between defensive and front-heavy shapes. Fighting spirit and set pieces are the weapons.",
+      "attack": "Aymen Hussein led all Asian qualifying scorers with 8 goals and netted the winner vs Bolivia in the playoff; he is the focal point. Zidane Iqbal, Aimar Sher, Kevin Yakob and Amir Al-Ammari add diaspora-developed technical quality, but creation against elite defenses will be scarce.",
+      "defense": "Veteran captain-keeper Jalal Hassan (100 caps) marshals an organized, committed back line that ground out the playoff route. Solid at Asian level but untested against top-10 attacks; conceding from sustained pressure and pace in behind is the obvious vulnerability.",
+      "key_players": [
+        "Aymen Hussein (ST, Al-Karma)",
+        "Jalal Hassan (GK, --, captain)",
+        "Zidane Iqbal (CM, FC Utrecht)",
+        "Aimar Sher (CM, --)",
+        "Amir Al-Ammari (CM, --)",
+        "Kevin Yakob (W, --)"
+      ],
+      "form": "Qualified the hard way: third in the AFC third round, through the fourth round, then beat Bolivia 2-1 in the inter-confederation playoff in Monterrey on 31 March 2026 - the last team to book a spot. First World Cup since 1986 and a squad with zero World Cup experience; bookmakers expect them to be among the first eliminated.",
+      "outlook": "Consensus bottom of Group I ('group of excitement' per Arnold); any point would be a result, and three defeats is the modal prediction.",
+      "strength_tier": 5,
+      "elo_research": 1618
+    },
+    {
+      "team": "Argentina",
+      "group": "J",
+      "coach": "Lionel Scaloni - the only Argentina head coach to win both the World Cup (2022) and the Copa America (2021, 2024), now chasing back-to-back world titles.",
+      "fifa_rank": 3,
+      "elo": 2120,
+      "style": "Possession-based but pragmatic 4-4-2/4-3-3 built around midfield control (De Paul, Mac Allister, Enzo Fernandez) and quick combination play feeding Messi between the lines; comfortable managing games and tournament knockouts.",
+      "attack": "Lionel Messi (38) headlines his sixth World Cup, supported by Julian Alvarez (Atletico Madrid) and Lautaro Martinez (Inter). Recent form: 11 goals in their last five matches before the pre-tournament window, then beat France 2-1 and drew Spain 1-1 in warm-up friendlies.",
+      "defense": "Very solid: only one or two goals conceded across their last five competitive matches, with Emiliano Martinez established as a big-game goalkeeper. Topped CONMEBOL qualifying, beating Brazil home and away, with the experienced Romero/Otamendi-era core refreshed by younger options.",
+      "key_players": [
+        "Lionel Messi (forward, Inter Miami)",
+        "Julian Alvarez (forward, Atletico Madrid)",
+        "Lautaro Martinez (forward, Inter)",
+        "Alexis Mac Allister (midfielder, Liverpool)",
+        "Enzo Fernandez (midfielder, Chelsea)",
+        "Emiliano Martinez (goalkeeper, Aston Villa)"
+      ],
+      "form": "Won CONMEBOL qualifying comfortably, sealing their place with matches to spare in March 2025. Four wins in their last five plus a 2-1 friendly win over France and 1-1 draw with Spain in June 2026. Opta gives them a 96.7% chance of advancing from Group J.",
+      "outlook": "Around +900 (9/2-9/1 range at UK books), second/third favourite behind Spain and France; consensus title contender expected to win Group J, which Opta rates the strongest group by power rating.",
+      "strength_tier": 1,
+      "elo_research": 2114
+    },
+    {
+      "team": "Austria",
+      "group": "J",
+      "coach": "Ralf Rangnick - architect of Austria's pressing identity who took them to the Euro 2024 round of 16 and ended a 28-year World Cup absence.",
+      "fifa_rank": 24,
+      "elo": 1800,
+      "style": "Aggressive Rangnick-school gegenpressing with fast vertical attacks and set-piece threat; high-energy 4-2-2-2/4-4-2 shapes that overwhelmed their qualifying group. (Elo is an estimate from FIFA rank and group-average Elo data, not a verified eloratings.net figure.)",
+      "attack": "Scored 22 goals in eight qualifiers, with record scorer Marko Arnautovic (37) netting eight of them including four in a 10-0 win over San Marino. Marcel Sabitzer provides midfield creativity and Michael Gregoritsch scored the decisive goal that sealed qualification.",
+      "defense": "Excellent in qualifying: just four goals conceded in eight matches, topping Group H two points clear of Bosnia with their only loss 1-0 in Romania. Captain David Alaba marshals the back line, though his injury history is a watch item.",
+      "key_players": [
+        "David Alaba (defender, Real Madrid)",
+        "Marcel Sabitzer (midfielder, Borussia Dortmund)",
+        "Marko Arnautovic (forward, record scorer)",
+        "Michael Gregoritsch (forward)",
+        "Konrad Laimer (midfielder, Bayern Munich)",
+        "Christoph Baumgartner (attacking midfielder, RB Leipzig)"
+      ],
+      "form": "Six wins from eight in qualifying (19 points, 22-4 goal difference) to win Group H; first World Cup since 1998. Opta rates them the second-likeliest side to advance from Group J at 67.4%, and their power rating (75.3) is second in the group.",
+      "outlook": "Consensus pick to finish second behind Argentina and a popular structural dark horse, with a realistic round-of-16 ceiling given their pressing system and qualifying defensive record.",
+      "strength_tier": 3,
+      "elo_research": 1830
+    },
+    {
+      "team": "Algeria",
+      "group": "J",
+      "coach": "Vladimir Petkovic - ex-Switzerland boss in charge since February 2024, signed an extension through July 2028 just before departing for the tournament.",
+      "fifa_rank": 28,
+      "elo": 1720,
+      "style": "Organized, transition-oriented side that gets the ball wide and forward quickly, with Mahrez as the creative focal point cutting in from the right; capable of high-volume scoring against weaker sides. (Elo is an estimate from FIFA rank and group-average Elo data, not a verified eloratings.net figure.)",
+      "attack": "Mohamed Amoura (VfL Wolfsburg) was their top scorer in qualifying with 10 goals in eight matches, while captain Riyad Mahrez (35, 113 caps, 38 goals) remains the chief creator. Their best-ever qualifying campaign featured eight wins, their highest tally in a single CAF campaign.",
+      "defense": "The defense is the relative weak point versus elite opposition; Luca Zidane (Granada), son of Zinedine, is a notable option in goal. They were rarely tested in CAF qualifying, and the step up to Argentina/Austria-level opponents is the main question mark.",
+      "key_players": [
+        "Riyad Mahrez (winger, Al-Ahli)",
+        "Mohamed Amoura (forward, VfL Wolfsburg)",
+        "Ibrahim Maza (attacking midfielder, Bayer Leverkusen)",
+        "Luca Zidane (goalkeeper, Granada)"
+      ],
+      "form": "First World Cup since 2014, qualified with a record eight wins in CAF qualifying. Pundits note they have never approached a World Cup in better shape, though Ismael Bennacer's omission caused debate. Opta gives them a 57.1% chance of reaching the knockouts.",
+      "outlook": "Third favourite in Group J behind Argentina and Austria per Opta power ratings (72.2); consensus sees them battling Austria and Jordan for second/third and a likely best-third-place route to the round of 32.",
+      "strength_tier": 3,
+      "elo_research": 1750
+    },
+    {
+      "team": "Jordan",
+      "group": "J",
+      "coach": "Jamal Sellami - Moroccan former midfielder appointed June 2024 who led Jordan to their first-ever World Cup and a first FIFA Arab Cup final (December 2025).",
+      "fifa_rank": 63,
+      "elo": 1600,
+      "style": "Well-structured, disciplined low-to-mid block that springs lightning-quick counter-transitions through its wide forwards; defensively compact and increasingly battle-hardened in Asian and Arab competition. (Elo is an estimate from FIFA rank and group-average Elo data, not a verified eloratings.net figure.)",
+      "attack": "Captain Mousa Al-Taamari ('Jordan's Messi', Rennes) is the main threat off the right after a 7-goal, 11-assist Ligue 1 season, with Ali Olwan scoring nine goals in Asian qualifying (third-most in the confederation). They beat Egypt 3-0 and Saudi Arabia 1-0 during the Arab Cup run.",
+      "defense": "Defensive organization is their backbone, anchored by centre-back Yazan Al-Arab and holding midfielder Nizar Al-Rashdan. They went unbeaten through the December 2025 Arab Cup, conceding sparingly against strong Arab opposition, though they have never faced a World Cup-level attack like Argentina's.",
+      "key_players": [
+        "Mousa Al-Taamari (winger, Rennes)",
+        "Ali Olwan (forward)",
+        "Yazan Al-Arab (centre-back)",
+        "Nizar Al-Rashdan (defensive midfielder)"
+      ],
+      "form": "Sealed a historic first World Cup berth with a 3-0 win in Oman in June 2025, then reached the Arab Cup final in December 2025 unbeaten (beating UAE, Kuwait, Egypt, Iraq and Saudi Arabia). Opta gives them a 40.9% chance of reaching the knockout phase - high for a debutant.",
+      "outlook": "Clear group outsider but a respected one; consensus sees them competing with Algeria/Austria for a best-third-place spot rather than rolling over, with momentum from the Arab Cup run.",
+      "strength_tier": 4,
+      "elo_research": 1680
+    },
+    {
+      "team": "Portugal",
+      "group": "K",
+      "coach": "Roberto Martinez - in charge since 2023 and delivered the 2025 UEFA Nations League title, but still faces scrutiny over big-tournament knockout pedigree.",
+      "fifa_rank": 5,
+      "elo": 1990,
+      "style": "Possession-dominant 4-2-3-1/4-3-3 with elite midfield technicians (Vitinha, Bruno Fernandes, Bernardo Silva) dictating tempo and full-backs providing width; can shift to a more direct game around Ronaldo in the box.",
+      "attack": "Enormous depth: Bruno Fernandes, Bernardo Silva, Joao Felix and Vitinha around Cristiano Ronaldo, who at 41 makes a record sixth World Cup but missed the March window with a hamstring strain. Qualifying included a 9-1 demolition of Armenia; warm-ups brought a 2-0 win over the USA and 2-1 over Chile.",
+      "defense": "Ruben Dias anchors a back line that is strong but occasionally vulnerable to pace, as the shock qualifying loss to the Republic of Ireland and a draw with Hungary showed. Diogo Costa is an established top-level goalkeeper.",
+      "key_players": [
+        "Cristiano Ronaldo (forward, Al-Nassr)",
+        "Bruno Fernandes (attacking midfielder, Manchester United)",
+        "Vitinha (midfielder, PSG)",
+        "Bernardo Silva (midfielder, Manchester City)",
+        "Ruben Dias (centre-back, Manchester City)",
+        "Nuno Mendes (left-back, PSG)"
+      ],
+      "form": "2025 Nations League champions; qualified with only one defeat (Ireland). Won 2-0 vs USA in March and 2-1 vs Chile in June; faced Nigeria June 10 in a final warm-up. Opta: 59.0% to win Group K, 94.9% to reach the last 32.",
+      "outlook": "Roughly +850 and shortening - on the fringe of the favourite tier behind Spain/France/Argentina/England; expected to win Group K, with Ronaldo's fitness and knockout-round history the recurring caveats.",
+      "strength_tier": 1,
+      "elo_research": 1986
+    },
+    {
+      "team": "Colombia",
+      "group": "K",
+      "coach": "Nestor Lorenzo - in charge since 2022 (assistant on the 2014 QF run); built one of CONMEBOL's most cohesive squads, 14 of 26 players having 30+ caps.",
+      "fifa_rank": 13,
+      "elo": 1920,
+      "style": "Front-foot, technically fluid 4-2-3-1 with James Rodriguez orchestrating between the lines and Luis Diaz attacking from the left; press-resistant midfield but can be opened up in transition by elite attacks.",
+      "attack": "Luis Diaz (Bayern Munich) is the star, with captain James Rodriguez (2014 Golden Boot) the creative hub in likely his final tournament. Recent scoring is healthy - 10 goals in their last five, including 3-0 vs Australia, 3-1 vs Costa Rica and 2-0 vs Jordan.",
+      "defense": "The concern: friendly losses to Croatia (2-1) and France (3-1) exposed a recurring defensive problem Lorenzo has acknowledged but not yet solved; six conceded in their last five. Veteran keeper David Ospina (125+ caps) is in the squad with Camilo Vargas competing in goal.",
+      "key_players": [
+        "Luis Diaz (winger, Bayern Munich)",
+        "James Rodriguez (attacking midfielder, captain)",
+        "Jhon Duran (forward)",
+        "Richard Rios (midfielder)",
+        "Davinson Sanchez (centre-back, Galatasaray)",
+        "Jefferson Lerma (midfielder, Crystal Palace)"
+      ],
+      "form": "Qualified comfortably from CONMEBOL and arrive on a 3-from-5 winning run, but the Croatia and France friendly defeats in the final windows cooled some of the long unbeaten-run hype from 2024-25. Opta: 84.9% to reach the last 32.",
+      "outlook": "Consensus dark horse: clear second favourite in Group K and a popular quarter-final-ceiling pick; the June 27 Portugal game in Miami is billed as the group decider.",
+      "strength_tier": 2,
+      "elo_research": 1982
+    },
+    {
+      "team": "Uzbekistan",
+      "group": "K",
+      "coach": "Fabio Cannavaro - 2006 World Cup-winning captain appointed October 2025 after Srecko Katanec's staff did the qualifying work; tasked with adding Italian defensive structure.",
+      "fifa_rank": 50,
+      "elo": 1680,
+      "style": "Compact, defense-first team built on tactical discipline - just 7 goals conceded in 10 third-round AFC qualifiers - looking to release Shomurodov and quick wingers in transition. (Elo is an estimate from FIFA rank and group-average Elo data, not a verified eloratings.net figure.)",
+      "attack": "Captain and all-time top scorer Eldor Shomurodov (44 international goals) led the qualification campaign with five goals. Scoring volume is modest (27 goals across 16 second/third-round qualifiers), so they rely on efficiency and set pieces rather than sustained pressure.",
+      "defense": "Their calling card: unbeaten through the entire second round and only one loss in ten third-round matches, conceding seven. Manchester City's Abdukodir Khusanov (22, 26+ caps) is the standout defender and one of Asia's best young talents.",
+      "key_players": [
+        "Eldor Shomurodov (forward, Roma)",
+        "Abdukodir Khusanov (centre-back, Manchester City)",
+        "Abbosbek Fayzullaev (attacking midfielder)",
+        "Otabek Shukurov (midfielder)"
+      ],
+      "form": "First-ever World Cup, qualified second behind Iran in their AFC group with five unbeaten games to close. Under Cannavaro they beat Kuwait and Egypt in friendlies and lost only to a last-gasp Gakpo goal against the Netherlands on the eve of the tournament - encouraging momentum.",
+      "outlook": "Outsider expected to finish third/fourth in Group K behind Portugal and Colombia, but the defensive structure plus the Netherlands near-miss make them a live spoiler for a third-place knockout berth.",
+      "strength_tier": 4,
+      "elo_research": 1700
+    },
+    {
+      "team": "DR Congo",
+      "group": "K",
+      "coach": "Sebastien Desabre - Frenchman in charge since August 2022 who built a diaspora-heavy squad and navigated two playoff gauntlets to reach a first World Cup of the DR Congo era.",
+      "fifa_rank": 45,
+      "elo": 1640,
+      "style": "Physical, well-drilled counter-attacking side with Premier League athleticism in key positions; resilient knockout-football temperament proven across five playoff matches. (Elo is an estimate from FIFA rank and group-average Elo data, not a verified eloratings.net figure.)",
+      "attack": "Newcastle's Yoane Wissa leads the line as the most dangerous attacker, with veteran Cedric Bakambu (35) one goal shy of the national scoring record (22). Goals were hard-earned through the playoffs - they edged Nigeria 1-1 (won on penalties) - so chance creation against packed defenses is a concern.",
+      "defense": "The team's foundation: captain and most-capped player Chancel Mbemba (Lille, 107 caps) marshals the back line, joined by Aaron Wan-Bissaka (West Ham), who switched allegiance. They ground out playoff wins against Cameroon and Nigeria with defensive discipline and set-piece security.",
+      "key_players": [
+        "Yoane Wissa (forward, Newcastle United)",
+        "Chancel Mbemba (centre-back, Lille)",
+        "Aaron Wan-Bissaka (right-back, West Ham)",
+        "Cedric Bakambu (forward)"
+      ],
+      "form": "Beat Cameroon then Nigeria (1-1, penalties) in the CAF playoffs in November 2025, then won the seeded Pathway 1 final of the inter-confederation playoffs on March 31, 2026 to qualify - their first World Cup since 1974 (as Zaire). Warm-up included a friendly vs Chile and a final tune-up in France.",
+      "outlook": "Group K outsider alongside Uzbekistan per Opta (Portugal 94.9% and Colombia 84.9% are expected through); books see them fighting for a best-third-place miracle rather than top two.",
+      "strength_tier": 4,
+      "elo_research": 1670
+    },
+    {
+      "team": "England",
+      "group": "L",
+      "coach": "Thomas Tuchel - German Champions League winner hired specifically to convert England's talent into a trophy; oversaw a historically perfect qualifying campaign.",
+      "fifa_rank": 4,
+      "elo": 2010,
+      "style": "Disciplined 4-2-3-1/4-3-3 with Declan Rice anchoring, Bellingham at 10 behind Kane and Saka wide right; markedly more defensively structured and game-managed than under previous regimes.",
+      "attack": "Harry Kane, England's record scorer (78+ goals), arrives off a 58-goal club season at Bayern Munich and is a Ballon d'Or contender; Bellingham and Saka supply the rest. Qualifying produced 22 goals in eight games. Foden and Palmer were both left out of the 26, underlining attacking depth.",
+      "defense": "The headline stat: eight qualifying wins with zero goals conceded - the most emphatic record of any UEFA qualifier. Jordan Pickford remains the established No.1 behind a settled back line that is much harder to break down under Tuchel.",
+      "key_players": [
+        "Harry Kane (forward, Bayern Munich)",
+        "Jude Bellingham (attacking midfielder, Real Madrid)",
+        "Bukayo Saka (winger, Arsenal)",
+        "Declan Rice (midfielder, Arsenal)",
+        "Jordan Pickford (goalkeeper, Everton)",
+        "John Stones (centre-back, Manchester City)"
+      ],
+      "form": "Perfect 8/8 qualifying record (22-0 aggregate), first UEFA side to seal qualification (October 2025). Opta makes them the third-likeliest team in the tournament to top their group (67.5% for Group L).",
+      "outlook": "Around +700, fourth in the outright market behind Spain and France and alongside Argentina; consensus expects them to win Group L and views them as a genuine title contender under Tuchel.",
+      "strength_tier": 1,
+      "elo_research": 2021
+    },
+    {
+      "team": "Croatia",
+      "group": "L",
+      "coach": "Zlatko Dalic - in charge since 2017, having delivered the 2018 final, 2022 third place and now an almost flawless qualifying campaign in his fourth World Cup cycle.",
+      "fifa_rank": 11,
+      "elo": 1880,
+      "style": "Midfield-dominant, tempo-controlling football around the 40-year-old Modric, blending the old guard (Kovacic, Perisic, Kramaric) with emerging talents (Baturina, Sucic); masters of tournament game-management and shootouts. (Elo is an estimate from FIFA rank and group-average Elo data, not a verified eloratings.net figure.)",
+      "attack": "Andrej Kramaric top-scored in qualifying with six as Croatia hit 26 goals in eight games; Ante Budimir and the evergreen Ivan Perisic add penalty-box presence, with Baturina and the Sucics injecting youth. Recently beat Colombia 2-1 in a friendly.",
+      "defense": "Conceded just four goals in qualifying. Josko Gvardiol (Manchester City) returns from a broken shin to anchor the back line in front of Dominik Livakovic, the 2022 shootout hero.",
+      "key_players": [
+        "Luka Modric (midfielder, captain, 196+ caps)",
+        "Josko Gvardiol (centre-back, Manchester City)",
+        "Mateo Kovacic (midfielder, Manchester City)",
+        "Andrej Kramaric (forward, Hoffenheim)",
+        "Martin Baturina (attacking midfielder)",
+        "Dominik Livakovic (goalkeeper)"
+      ],
+      "form": "Topped their qualifying group with seven wins and a draw (26-4 goals), only dropping points 0-0 in Czechia. Opta gives them a 76.9% chance of reaching the knockout phase from Group L. Question marks center on the age profile, not results.",
+      "outlook": "Second favourite in Group L and a perennial knockout overachiever; consensus tips a likely round-of-16/QF run in Modric's farewell tournament, with the England opener on June 17 deciding the group.",
+      "strength_tier": 2,
+      "elo_research": 1900
+    },
+    {
+      "team": "Panama",
+      "group": "L",
+      "coach": "Thomas Christiansen - ex-Leeds boss in charge since 2020 who has lifted Panama from 81st to the low-30s in the FIFA rankings across a six-year project.",
+      "fifa_rank": 34,
+      "elo": 1650,
+      "style": "Hard-running, well-organized CONCACAF side that defends in a compact mid-block, presses in waves and scores through set pieces, full-back overlaps and direct wide play. (Elo is an estimate from FIFA rank and group-average Elo data, not a verified eloratings.net figure; FIFA rank reported as 33rd or 34th depending on source.)",
+      "attack": "Jose Fajardo and Jose Luis Rodriguez led qualifying with three goals each, with right-back Amir Murillo the top assist provider (three) and Leon striker Ismael Diaz leading the line. They closed qualifying with a statement 3-0 win over El Salvador to top their group.",
+      "defense": "Organized and physical, anchored by Cesar Blackman and the veteran leadership of Anibal Godoy (157 caps, national record); Orlando Mosquera is the established goalkeeper. They kept clean sheets in both decisive qualifiers against El Salvador (1-0 away, 3-0 home).",
+      "key_players": [
+        "Adalberto Carrasquilla (midfielder, Pumas UNAM)",
+        "Amir Murillo (right-back, Marseille)",
+        "Jose Fajardo (forward)",
+        "Ismael Diaz (forward, Leon)",
+        "Anibal Godoy (midfielder, 157 caps)",
+        "Cesar Blackman (defender)"
+      ],
+      "form": "Qualified directly by winning their CONCACAF final-round group (sealed 3-0 vs El Salvador, November 2025) for a second World Cup after 2018. Opta gives them a 40.0% chance of reaching the knockout phase - lowest in Group L but not negligible.",
+      "outlook": "Bottom-tier pick in Group L per the books, but a structured, experienced side with semi-home CONCACAF support; consensus best case is stealing points from Ghana/Croatia and sneaking a best-third place.",
+      "strength_tier": 4,
+      "elo_research": 1650
+    },
+    {
+      "team": "Ghana",
+      "group": "L",
+      "coach": "Carlos Queiroz - 73-year-old Portuguese veteran (Portugal 2010, Iran 2014/2018/2022) appointed on April 13, 2026, just two months before the tournament, after Otto Addo oversaw qualification.",
+      "fifa_rank": 73,
+      "elo": 1700,
+      "style": "Expect Queiroz's trademark deep defensive block and rapid counters, leveraging a young squad (average age ~26) with elite Premier League/Ligue 1 pace in wide areas. (Elo is an estimate from FIFA rank and group-average Elo data, not a verified eloratings.net figure.)",
+      "attack": "Antoine Semenyo arrives in outstanding form (21 goals/6 assists this season across Bournemouth and Manchester City, whom he joined in January) alongside Inaki Williams. Captain Jordan Ayew (Leicester, 118 caps/33 goals) scored seven in qualifying. The big blow: Mohammed Kudus, who scored the qualification-clinching goal, is ruled out injured.",
+      "defense": "The shakier half of the team: a young back line with limited cohesion, a late coaching change and no clearly established top-class goalkeeper. Thomas Partey provides the experienced midfield shield.",
+      "key_players": [
+        "Antoine Semenyo (forward, Manchester City)",
+        "Inaki Williams (forward, Athletic Club)",
+        "Jordan Ayew (forward, captain, Leicester City)",
+        "Thomas Partey (midfielder)",
+        "Alexander Djiku (centre-back)"
+      ],
+      "form": "Won their CAF qualifying group, sealing it with a 1-0 win over Comoros (Kudus goal). Form caveats: the April coaching change to Queiroz, Kudus's injury and Andre Ayew's omission. Opta gives them a 49.5% chance of reaching the knockout phase.",
+      "outlook": "Group L underdog alongside Panama, but bookmakers respect the Semenyo/Williams firepower; consensus sees third place and a fight for a best-third knockout berth as the realistic target.",
+      "strength_tier": 4,
+      "elo_research": 1620
+    }
+  ]
+}

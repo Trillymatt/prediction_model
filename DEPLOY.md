@@ -46,6 +46,18 @@ If you later want the refresh fully in the cloud, the usual options are a
 residential/rotating proxy for the nba_api calls, or a small always-on box
 (e.g. a home Raspberry Pi) that runs the cron and pushes models to the repo.
 
+## Soccer (World Cup)
+
+The soccer side (scripts 20–23, `soccer_common.py`, `soccer_team_priors.json`)
+deploys with the same image — no extra service. It pulls from ESPN's public
+API, which (unlike stats.nba.com) doesn't block datacenter IPs, but the
+simplest setup is to let the existing Mac cron run everything: steps 20/21
+are part of `refresh.py`'s pipeline. One-time setup (Supabase SQL + history
+backfill) is in `SOCCER_SETUP.md`. There are no baked soccer models — the
+Elo/Poisson engine reads Supabase + the priors file live, so it needs no
+redeploys during the tournament (only edit/commit `soccer_team_priors.json`
+if you want to tweak the scouting notes).
+
 ## Local production test
 
     cd frontend && npm run build && cd ..

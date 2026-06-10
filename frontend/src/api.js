@@ -35,3 +35,33 @@ export function projectGame({ home, away, date, gameId }) {
   if (gameId) params.set("game_id", gameId);
   return getJSON(`/api/game?${params.toString()}`);
 }
+
+// ---- Soccer (World Cup) ----------------------------------------------------
+
+export function fetchSoccerStats() {
+  return getJSON("/api/soccer/stats").then((d) => d.stats);
+}
+
+export function searchSoccerPlayers(q) {
+  return getJSON(`/api/soccer/players?q=${encodeURIComponent(q)}`).then(
+    (d) => d.players
+  );
+}
+
+export function projectSoccerStat({ player, stat, line, opponent }) {
+  const params = new URLSearchParams({ player, stat });
+  if (line !== "" && line != null) params.set("line", line);
+  if (opponent) params.set("opponent", opponent);
+  return getJSON(`/api/soccer/project?${params.toString()}`);
+}
+
+export function fetchUpcomingSoccerGames(days = 10) {
+  return getJSON(`/api/soccer/games?days=${days}`).then((d) => d.games);
+}
+
+export function projectSoccerGame({ home, away, date, matchId }) {
+  const params = new URLSearchParams({ home, away });
+  if (date) params.set("date", date);
+  if (matchId) params.set("match_id", matchId);
+  return getJSON(`/api/soccer/game?${params.toString()}`);
+}
