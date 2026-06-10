@@ -287,6 +287,20 @@ select:focus {
   background: var(--under);
 }
 
+/* Middle segment of the soccer three-way (win / draw / win) bar. */
+.conf-bar-fill.draw {
+  background: #5a6473;
+}
+
+/* Sport switcher sits above the props/game tabs; slightly tighter. */
+.sport-tabs {
+  margin-top: 22px;
+}
+
+.sport-tabs + .tabs {
+  margin-top: 10px;
+}
+
 .recommendation {
   margin-top: 14px;
   text-align: center;

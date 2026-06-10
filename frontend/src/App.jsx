@@ -5,6 +5,11 @@ import {
   projectStat,
   fetchUpcomingGames,
   projectGame,
+  fetchSoccerStats,
+  searchSoccerPlayers,
+  projectSoccerStat,
+  fetchUpcomingSoccerGames,
+  projectSoccerGame,
 } from "./api.js";
 
 // Friendly labels for the stat dropdown.
@@ -48,7 +53,7 @@ function sortStats(stats) {
   });
 }
 
-function PlayerSearch({ selected, onSelect }) {
+function PlayerSearch({ selected, onSelect, searchFn = searchPlayers }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
   const [open, setOpen] = useState(false);
@@ -62,10 +67,10 @@ function PlayerSearch({ selected, onSelect }) {
       return;
     }
     const t = setTimeout(() => {
-      searchPlayers(query).then(setResults).catch(() => setResults([]));
+      searchFn(query).then(setResults).catch(() => setResults([]));
     }, 220);
     return () => clearTimeout(t);
-  }, [query, selected]);
+  }, [query, selected, searchFn]);
 
   // Close the dropdown on outside click.
   useEffect(() => {
@@ -103,7 +108,8 @@ function PlayerSearch({ selected, onSelect }) {
             >
               <span>{p.player_name}</span>
               <span className="muted">
-                {p.team} · {p.position}
+                {p.team}
+                {p.position ? ` · ${p.position}` : ""}
               </span>
             </li>
           ))}
@@ -399,7 +405,409 @@ function GameView() {
   );
 }
 
+// ===========================================================================
+// Soccer (World Cup)
+// ===========================================================================
+
+const SOCCER_STAT_LABELS = {
+  goals: "Goals",
+  assists: "Assists",
+  goals_assists: "Goals + Assists",
+  shots: "Shots",
+  shots_on_target: "Shots on Target",
+  key_passes: "Key Passes",
+  passes: "Passes",
+  tackles: "Tackles",
+  saves: "Saves (GK)",
+  cards: "Cards (Yellow + Red)",
+  fouls_committed: "Fouls Committed",
+  fouls_suffered: "Fouls Drawn",
+};
+
+const SOCCER_STAT_ORDER = [
+  "goals", "assists", "goals_assists", "shots", "shots_on_target",
+  "key_passes", "passes", "tackles", "cards", "fouls_committed",
+  "fouls_suffered", "saves",
+];
+
+function sortSoccerStats(stats) {
+  return [...stats].sort((a, b) => {
+    const ia = SOCCER_STAT_ORDER.indexOf(a);
+    const ib = SOCCER_STAT_ORDER.indexOf(b);
+    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+  });
+}
+
+function SoccerResultCard({ r }) {
+  const loc = r.home_away === "AWAY" ? "@" : "vs";
+  const recClass =
+    r.confidence_label === "STRONG"
+      ? "strong"
+      : r.confidence_label === "LEAN"
+      ? "lean"
+      : "pass";
+
+  return (
+    <div className="card result">
+      <div className="result-head">
+        <div>
+          <h2>{r.player_name}</h2>
+          <div className="muted">
+            {r.team}
+            {r.position ? ` · ${r.position}` : ""}
+            {r.opponent ? `  ${loc} ${r.opponent}` : ""}
+            {r.match_date ? ` · ${r.match_date}` : ""}
+          </div>
+        </div>
+        <span className="badge model">poisson model</span>
+      </div>
+
+      <div className="proj">
+        <div className="proj-num">
+          {r.projection}
+          {r.sigma != null && <span className="sigma"> ± {r.sigma}</span>}
+        </div>
+        <div className="muted">
+          projected {SOCCER_STAT_LABELS[r.stat] || r.stat}
+        </div>
+      </div>
+
+      {r.line != null && r.recommendation && (
+        <>
+          <ConfidenceBar pOver={r.p_over} pUnder={r.p_under} />
+          <div className={`recommendation ${recClass}`}>
+            {r.recommendation} {r.line}
+            <span className="conf-label">
+              {Math.round(r.confidence * 100)}% · {r.confidence_label}
+            </span>
+          </div>
+        </>
+      )}
+      {r.line != null && !r.recommendation && r.note && (
+        <div className="note">{r.note}</div>
+      )}
+
+      <div className="splits">
+        <div>
+          <span className="muted">L5</span>
+          <b>{r.l5 ?? "–"}</b>
+        </div>
+        <div>
+          <span className="muted">L10</span>
+          <b>{r.l10 ?? "–"}</b>
+        </div>
+        <div>
+          <span className="muted">Career avg</span>
+          <b>{r.avg ?? "–"}</b>
+        </div>
+        <div>
+          <span className="muted">Minutes</span>
+          <b>{r.expected_minutes ?? "–"}</b>
+        </div>
+      </div>
+
+      {r.factors && r.factors.length > 0 && (
+        <div className="why">
+          <h3>Why this projection</h3>
+          {r.factors.map((f, i) => (
+            <div className="factor" key={i}>
+              <div className="factor-head">
+                <span className="factor-title">{f.title}</span>
+                <span className="factor-value">{f.value}</span>
+              </div>
+              <div className="factor-detail">{f.detail}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ThreeWayBar({ r }) {
+  const homePct = Math.round(r.p_home_win * 100);
+  const drawPct = Math.round(r.p_draw * 100);
+  const awayPct = 100 - homePct - drawPct;
+  return (
+    <div className="conf-bar">
+      <div className="conf-bar-fill over" style={{ width: `${homePct}%` }}>
+        {homePct >= 16 && (
+          <span>
+            {r.home_team} {homePct}%
+          </span>
+        )}
+      </div>
+      <div className="conf-bar-fill draw" style={{ width: `${drawPct}%` }}>
+        {drawPct >= 14 && <span>Draw {drawPct}%</span>}
+      </div>
+      <div className="conf-bar-fill under" style={{ width: `${awayPct}%` }}>
+        {awayPct >= 16 && (
+          <span>
+            {r.away_team} {awayPct}%
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SoccerGameCard({ r }) {
+  const recClass =
+    r.confidence_label === "STRONG"
+      ? "strong"
+      : r.confidence_label === "LEAN"
+      ? "lean"
+      : "pass";
+  const pickText =
+    r.predicted_outcome === "Draw" ? "Draw" : `${r.predicted_outcome} wins`;
+
+  return (
+    <div className="card result">
+      <div className="result-head">
+        <div>
+          <h2>
+            {r.home_team} vs {r.away_team}
+          </h2>
+          <div className="muted">
+            {r.match_date}
+            {r.group ? ` · Group ${r.group}` : ""} · {r.competition}
+          </div>
+        </div>
+        <span className="badge model">poisson · elo</span>
+      </div>
+
+      <div className="proj">
+        <div className="proj-num game-score">
+          {r.projected_home_goals}
+          <span className="score-sep"> – </span>
+          {r.projected_away_goals}
+        </div>
+        <div className="muted">projected goals (90 minutes)</div>
+      </div>
+
+      <ThreeWayBar r={r} />
+      <div className={`recommendation ${recClass}`}>
+        {pickText}
+        <span className="conf-label">
+          {Math.round(r.confidence * 100)}% · {r.confidence_label}
+        </span>
+      </div>
+
+      <div className="splits">
+        <div>
+          <span className="muted">Over {r.total_line}</span>
+          <b>{Math.round(r.p_over * 100)}%</b>
+        </div>
+        <div>
+          <span className="muted">BTTS</span>
+          <b>{Math.round(r.p_btts * 100)}%</b>
+        </div>
+        <div>
+          <span className="muted">{r.home_team} or draw</span>
+          <b>{Math.round(r.p_home_or_draw * 100)}%</b>
+        </div>
+        <div>
+          <span className="muted">{r.away_team} or draw</span>
+          <b>{Math.round(r.p_away_or_draw * 100)}%</b>
+        </div>
+      </div>
+
+      {r.top_scores && r.top_scores.length > 0 && (
+        <div className="note">
+          Likely scores:{" "}
+          {r.top_scores
+            .slice(0, 3)
+            .map((s) => `${s.score} (${Math.round(s.p * 100)}%)`)
+            .join(" · ")}
+        </div>
+      )}
+
+      {r.factors && r.factors.length > 0 && (
+        <div className="why">
+          <h3>Why this call</h3>
+          {r.factors.map((f, i) => (
+            <div className="factor" key={i}>
+              <div className="factor-head">
+                <span className="factor-title">{f.title}</span>
+                <span className="factor-value">{f.value}</span>
+              </div>
+              <div className="factor-detail">{f.detail}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SoccerGameView() {
+  const [games, setGames] = useState([]);
+  const [selected, setSelected] = useState(null);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    fetchUpcomingSoccerGames()
+      .then(setGames)
+      .catch(() => setGames([]));
+  }, []);
+
+  const run = async (g) => {
+    setSelected(g.match_id);
+    setError("");
+    setLoading(true);
+    setResult(null);
+    try {
+      const r = await projectSoccerGame({
+        home: g.home_team,
+        away: g.away_team,
+        date: g.match_date,
+        matchId: g.match_id,
+      });
+      setResult(r);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="card controls">
+        <div className="field">
+          <label>Upcoming matches</label>
+          {games.length === 0 && (
+            <div className="muted">
+              No upcoming matches found — run 20_soccer_schedule.py to load
+              the schedule.
+            </div>
+          )}
+          <div className="game-list">
+            {games.map((g) => (
+              <button
+                key={g.match_id}
+                className={`game-pick ${selected === g.match_id ? "active" : ""}`}
+                onClick={() => run(g)}
+                disabled={loading}
+              >
+                <span className="game-teams">
+                  {g.home_team} vs {g.away_team}
+                </span>
+                <span className="muted">
+                  {g.match_date}
+                  {g.competition === "FIFA World Cup" ? " · World Cup" : ""}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+        {loading && <div className="muted">Crunching…</div>}
+        {error && <div className="error">{error}</div>}
+      </div>
+
+      {result && <SoccerGameCard r={result} />}
+    </>
+  );
+}
+
+function SoccerPropsView() {
+  const [stats, setStats] = useState([]);
+  const [player, setPlayer] = useState(null);
+  const [stat, setStat] = useState("goals");
+  const [line, setLine] = useState("");
+  const [opponent, setOpponent] = useState("");
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    fetchSoccerStats()
+      .then((s) => setStats(sortSoccerStats(s)))
+      .catch(() => {});
+  }, []);
+
+  const run = async () => {
+    if (!player) {
+      setError("Pick a player first.");
+      return;
+    }
+    setError("");
+    setLoading(true);
+    setResult(null);
+    try {
+      const r = await projectSoccerStat({
+        player: player.player_name,
+        stat,
+        line,
+        opponent: opponent.trim(),
+      });
+      setResult(r);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="card controls">
+        <PlayerSearch
+          selected={player}
+          onSelect={setPlayer}
+          searchFn={searchSoccerPlayers}
+        />
+
+        <div className="row">
+          <div className="field">
+            <label>Stat</label>
+            <select value={stat} onChange={(e) => setStat(e.target.value)}>
+              {stats.map((s) => (
+                <option key={s} value={s}>
+                  {SOCCER_STAT_LABELS[s] || s}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label>Your line</label>
+            <input
+              type="number"
+              step="0.5"
+              placeholder="e.g. 0.5"
+              value={line}
+              onChange={(e) => setLine(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="row">
+          <div className="field">
+            <label>Opponent (optional)</label>
+            <input
+              type="text"
+              placeholder="auto-detect from schedule"
+              value={opponent}
+              onChange={(e) => setOpponent(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <button className="go" onClick={run} disabled={loading}>
+          {loading ? "Crunching…" : "Get Confidence"}
+        </button>
+        {error && <div className="error">{error}</div>}
+      </div>
+
+      {result && <SoccerResultCard r={result} />}
+    </>
+  );
+}
+
 export default function App() {
+  const [sport, setSport] = useState("nba");
   const [mode, setMode] = useState("props");
   const [stats, setStats] = useState([]);
   const [player, setPlayer] = useState(null);
@@ -450,6 +858,21 @@ export default function App() {
         </p>
       </header>
 
+      <div className="tabs sport-tabs">
+        <button
+          className={sport === "nba" ? "tab active" : "tab"}
+          onClick={() => setSport("nba")}
+        >
+          🏀 NBA
+        </button>
+        <button
+          className={sport === "soccer" ? "tab active" : "tab"}
+          onClick={() => setSport("soccer")}
+        >
+          ⚽ World Cup
+        </button>
+      </div>
+
       <div className="tabs">
         <button
           className={mode === "props" ? "tab active" : "tab"}
@@ -461,13 +884,16 @@ export default function App() {
           className={mode === "game" ? "tab active" : "tab"}
           onClick={() => setMode("game")}
         >
-          Game Outcome
+          {sport === "soccer" ? "Match Outcome" : "Game Outcome"}
         </button>
       </div>
 
-      {mode === "game" && <GameView />}
+      {sport === "soccer" && mode === "game" && <SoccerGameView />}
+      {sport === "soccer" && mode === "props" && <SoccerPropsView />}
 
-      {mode === "props" && (
+      {sport === "nba" && mode === "game" && <GameView />}
+
+      {sport === "nba" && mode === "props" && (
       <div className="card controls">
         <PlayerSearch selected={player} onSelect={setPlayer} />
 
@@ -529,7 +955,7 @@ export default function App() {
       </div>
       )}
 
-      {mode === "props" && result && <ResultCard r={result} />}
+      {sport === "nba" && mode === "props" && result && <ResultCard r={result} />}
     </div>
   );
 }

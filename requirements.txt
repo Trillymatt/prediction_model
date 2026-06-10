@@ -1,6 +1,7 @@
 nba_api
 supabase
 python-dotenv
+requests
 pandas
 scikit-learn
 joblib
