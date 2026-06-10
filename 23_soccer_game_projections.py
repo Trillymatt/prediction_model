@@ -242,14 +242,23 @@ def build_factors(result, xg, home_prof, away_prof):
                       "travel, familiarity). Neutral-venue matches get no bonus.",
         })
 
-    # 8) Group context.
-    if xg["world_cup"] and (home_prof.get("group") or away_prof.get("group")):
+    # 8) Stage context: same group => group-stage card; different groups at
+    #    the WC => it's a knockout, where a 90-minute draw means extra time.
+    if result.get("group"):
         factors.append({
             "title": "Group context",
-            "value": f"Group {home_prof.get('group') or away_prof.get('group')}",
+            "value": f"Group {result['group']}",
             "detail": "Group-stage matches can end level -- the draw is a real "
                       "outcome (no extra time until the knockouts), which is why "
                       "three probabilities are shown.",
+        })
+    elif xg["world_cup"]:
+        factors.append({
+            "title": "Knockout context",
+            "value": "Win-or-go-home match",
+            "detail": "Probabilities are for the 90-minute result (the standard "
+                      "1X2 market). A 'draw' here means extra time / penalties "
+                      "decide who advances -- check how your book settles it.",
         })
 
     # 9) Method.
@@ -305,6 +314,11 @@ def project_soccer_game(home: str, away: str, match_date=None, match_id=None,
 
     home_prof, away_prof = sc.team_profile(home), sc.team_profile(away)
 
+    # Only label a group when BOTH teams share it -- a cross-group WC match
+    # is a knockout, not a group game.
+    same_group = (home_prof.get("group") and
+                  home_prof.get("group") == away_prof.get("group"))
+
     result = {
         "method": "poisson_elo",
         "home_team": home,
@@ -312,7 +326,8 @@ def project_soccer_game(home: str, away: str, match_date=None, match_id=None,
         "match_date": match_date,
         "match_id": match_id,
         "competition": competition,
-        "group": home_prof.get("group") if sc.is_world_cup(competition) else None,
+        "group": home_prof.get("group")
+                 if (sc.is_world_cup(competition) and same_group) else None,
         "p_home_win": round(p_home, 4),
         "p_draw": round(p_draw, 4),
         "p_away_win": round(p_away, 4),

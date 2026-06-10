@@ -13,8 +13,11 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# The app: API, projection engines, pipeline scripts, and the trained models.
+# The app: API, projection engines, pipeline scripts, the trained models,
+# and the soccer scouting/Elo knowledge base (load_priors() falls back to
+# defaults silently if it's missing -- so it must ship in the image).
 COPY *.py ./
+COPY soccer_team_priors.json ./
 COPY models/ models/
 COPY --from=frontend /app/frontend/dist frontend/dist
 

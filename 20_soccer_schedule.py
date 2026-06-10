@@ -24,15 +24,20 @@ Setup:
     # fill in SUPABASE_URL and SUPABASE_KEY in .env
 """
 
-import sys
 import time
 import argparse
 import traceback
-from datetime import date, timedelta, datetime
+from datetime import date, timedelta, datetime, timezone
 
 import requests
 
 import soccer_common as sc
+
+try:
+    from zoneinfo import ZoneInfo
+    EASTERN = ZoneInfo("America/New_York")
+except Exception:  # noqa: BLE001 - no tz database => fall back to UTC dates
+    EASTERN = None
 
 
 # ---------------------------------------------------------------------------
@@ -87,9 +92,23 @@ def parse_event(event: dict, competition: str):
         state = status_obj.get("state")  # 'pre' | 'in' | 'post'
         status = "completed" if completed else ("live" if state == "in" else "upcoming")
 
-        raw_date = str(event.get("date") or "")           # e.g. 2026-06-11T20:00Z
+        # ESPN dates are UTC (e.g. 2026-06-11T20:00Z). Store the US/Eastern
+        # game day + kickoff, matching the NBA side's convention -- otherwise
+        # every US-evening match lands on the next calendar day and the
+        # nightly refresh gate / frontend dates are off by one.
+        raw_date = str(event.get("date") or "")
         match_date = raw_date[:10] or None
-        match_time = raw_date[11:16] or None              # HH:MM UTC
+        match_time = raw_date[11:16] or None
+        if EASTERN is not None:
+            try:
+                dt_utc = datetime.strptime(
+                    raw_date[:16], "%Y-%m-%dT%H:%M"
+                ).replace(tzinfo=timezone.utc)
+                local = dt_utc.astimezone(EASTERN)
+                match_date = local.date().isoformat()
+                match_time = local.strftime("%H:%M")      # HH:MM Eastern
+            except ValueError:
+                pass
 
         def score(c):
             try:

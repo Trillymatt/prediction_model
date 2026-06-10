@@ -13,7 +13,8 @@ scripts and api.py's soccer endpoints.
 
 import os
 import math
-from datetime import datetime, date
+import time
+from datetime import datetime, date, timedelta
 
 from dotenv import load_dotenv
 from supabase import create_client, Client
@@ -164,23 +165,38 @@ def poisson_pmf(k: int, lam: float) -> float:
     return math.exp(-lam) * lam ** k / math.factorial(k)
 
 
-def poisson_p_over(line: float, lam: float) -> float:
-    """P(X > line) for X ~ Poisson(lam) and a half-point betting line.
+def poisson_line_probs(line: float, lam: float):
+    """(p_over, p_push, p_under) for X ~ Poisson(lam) against a betting line.
 
-    A 0.5 line means 'scores at least 1', a 1.5 line 'at least 2', etc. For
-    whole-number lines we treat a push as a loss for the over (book-dependent,
-    but conservative).
+    A 0.5 line means 'at least 1', a 1.5 line 'at least 2', etc. On a
+    whole-number line, landing exactly on it is a PUSH (books refund it), so
+    that mass belongs to neither side -- counting it for the under was a bug.
     """
-    threshold = math.floor(line) + 1 if line == math.floor(line) else math.ceil(line)
-    p_under_or_push = sum(poisson_pmf(k, lam) for k in range(int(threshold)))
-    return max(0.0, min(1.0, 1.0 - p_under_or_push))
+    lam = max(lam, 0.0)
+    if line == math.floor(line):
+        k = int(line)
+        p_push = poisson_pmf(k, lam)
+        p_under = sum(poisson_pmf(i, lam) for i in range(k))
+    else:
+        p_push = 0.0
+        p_under = sum(poisson_pmf(i, lam) for i in range(math.ceil(line)))
+    p_over = max(0.0, 1.0 - p_under - p_push)
+    return p_over, p_push, min(p_under, 1.0)
+
+
+def poisson_p_over(line: float, lam: float) -> float:
+    """P(X strictly beats the line); pushes excluded. See poisson_line_probs."""
+    return poisson_line_probs(line, lam)[0]
 
 
 def fetch_all(table: str, columns: str, filters=None, order_col=None):
     """Select every row of a table, paging past the PostgREST 1000-row cap.
 
     `filters` is a list of (method, args...) tuples applied to the query,
-    e.g. [("eq", "status", "completed")].
+    e.g. [("eq", "status", "completed")]. Always adds the primary key `id`
+    as an ordering tiebreaker: order_col values like match_date aren't
+    unique, and without a total order Postgres may shuffle ties between
+    page requests, silently dropping/duplicating rows at page boundaries.
     """
     rows = []
     start = 0
@@ -190,6 +206,7 @@ def fetch_all(table: str, columns: str, filters=None, order_col=None):
             q = getattr(q, f[0])(*f[1:])
         if order_col:
             q = q.order(order_col, desc=False)
+        q = q.order("id", desc=False)
         res = q.range(start, start + PAGE_SIZE - 1).execute()
         page = res.data or []
         rows.extend(page)
@@ -230,16 +247,67 @@ def team_profile(team: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Optional log columns (shared by the puller and the props engine)
+# ---------------------------------------------------------------------------
+OPTIONAL_LOG_COLUMNS = ("passes", "tackles", "saves",
+                        "fouls_committed", "fouls_suffered")
+_optional_cols_cache = None
+
+
+def optional_log_columns() -> set:
+    """Which optional soccer_player_match_logs columns exist right now.
+
+    Probed once per process: one combined select when all columns exist (the
+    common case after running SOCCER_SETUP.md), falling back to per-column
+    probes so a partial migration still activates what's there.
+    """
+    global _optional_cols_cache
+    if _optional_cols_cache is not None:
+        return _optional_cols_cache
+    try:
+        sc_cols = ",".join(OPTIONAL_LOG_COLUMNS)
+        supabase.table(LOGS_TABLE).select(sc_cols).limit(1).execute()
+        _optional_cols_cache = set(OPTIONAL_LOG_COLUMNS)
+        return _optional_cols_cache
+    except Exception:  # noqa: BLE001 - at least one column missing
+        pass
+    present = set()
+    for col in OPTIONAL_LOG_COLUMNS:
+        try:
+            supabase.table(LOGS_TABLE).select(col).limit(1).execute()
+            present.add(col)
+        except Exception:  # noqa: BLE001 - column absent
+            continue
+    _optional_cols_cache = present
+    return present
+
+
+# ---------------------------------------------------------------------------
 # Schedule access + live Elo
 # ---------------------------------------------------------------------------
-def fetch_schedule_rows():
-    """All soccer_schedule rows, oldest first."""
-    return fetch_all(
+SCHEDULE_CACHE_TTL = 120.0    # seconds; data only changes on pipeline runs
+_schedule_cache = {"rows": None, "at": 0.0}
+
+
+def fetch_schedule_rows(force=False):
+    """All soccer_schedule rows, oldest first.
+
+    Cached for SCHEDULE_CACHE_TTL: every soccer endpoint needs these rows,
+    and the table only changes when the refresh pipeline runs -- without the
+    cache each API request would re-page the whole table out of Supabase.
+    """
+    now = time.monotonic()
+    if (not force and _schedule_cache["rows"] is not None
+            and now - _schedule_cache["at"] < SCHEDULE_CACHE_TTL):
+        return _schedule_cache["rows"]
+    rows = fetch_all(
         SCHEDULE_TABLE,
         "match_id,match_date,match_time,competition,season,home_team,away_team,"
         "status,home_score,away_score",
         order_col="match_date",
     )
+    _schedule_cache.update(rows=rows, at=now)
+    return rows
 
 
 def is_world_cup(competition) -> bool:
@@ -256,6 +324,20 @@ def _k_factor(competition) -> float:
     return ELO_K_QUALIFIER
 
 
+def home_elo_bonus(home_team, competition) -> int:
+    """The home side's Elo edge for one match.
+
+    World Cup 2026 is mostly neutral-venue: only the three hosts get the
+    bonus. Outside the WC the nominal home side is assumed genuinely at home.
+    """
+    if is_world_cup(competition):
+        return ELO_HOME_BONUS if normalize_team(home_team) in WC_HOSTS else 0
+    return ELO_HOME_BONUS
+
+
+_elo_cache = {"key": None, "ratings": None}
+
+
 def elo_ratings(schedule_rows) -> dict:
     """Current Elo per team: researched snapshot + updates from results.
 
@@ -265,7 +347,14 @@ def elo_ratings(schedule_rows) -> dict:
     margin of victory. This is what makes the model adapt as the World Cup
     goes on -- a team over-performing its scouting report gains rating with
     every result the nightly refresh ingests.
+
+    Memoized per schedule snapshot (the cached rows object), so repeated
+    calls within one request/TTL window don't replay the whole history.
     """
+    # len() in the key catches in-place appends to a cached/shared list.
+    key = (id(schedule_rows), len(schedule_rows))
+    if _elo_cache["key"] == key:
+        return _elo_cache["ratings"]
     priors = load_priors()
     snapshot = parse_date(priors["meta"].get("elo_snapshot_date")) or date(2026, 6, 1)
     ratings = {
@@ -275,8 +364,11 @@ def elo_ratings(schedule_rows) -> dict:
     for g in schedule_rows:
         if g.get("status") != "completed":
             continue
+        # Strictly after the snapshot: matches ON the snapshot date are
+        # already baked into the researched ratings (replaying them would
+        # double-count).
         d = parse_date(g.get("match_date"))
-        if d is None or d < snapshot:
+        if d is None or d <= snapshot:
             continue
         hs, as_ = g.get("home_score"), g.get("away_score")
         if hs is None or as_ is None:
@@ -287,15 +379,7 @@ def elo_ratings(schedule_rows) -> dict:
             continue
         rh = ratings.get(home, ELO_DEFAULT)
         ra = ratings.get(away, ELO_DEFAULT)
-
-        # Host bonus only when the nominal home side is genuinely at home
-        # (hosts at the WC; assume true home advantage outside the WC).
-        bonus = 0
-        if is_world_cup(g.get("competition")):
-            if home in WC_HOSTS:
-                bonus = ELO_HOME_BONUS
-        else:
-            bonus = ELO_HOME_BONUS
+        bonus = home_elo_bonus(home, g.get("competition"))
 
         expected_home = 1.0 / (1.0 + 10 ** (-((rh + bonus) - ra) / 400.0))
         result_home = 1.0 if hs > as_ else (0.5 if hs == as_ else 0.0)
@@ -305,6 +389,7 @@ def elo_ratings(schedule_rows) -> dict:
         delta = k * (result_home - expected_home)
         ratings[home] = rh + delta
         ratings[away] = ra - delta
+    _elo_cache.update(key=key, ratings=ratings)
     return ratings
 
 
@@ -366,12 +451,7 @@ def expected_goals(home, away, schedule_rows=None, competition="FIFA World Cup")
     elo_away = ratings.get(away, ELO_DEFAULT)
 
     world_cup = is_world_cup(competition)
-    home_bonus = 0
-    if world_cup:
-        if home in WC_HOSTS:
-            home_bonus = ELO_HOME_BONUS
-    else:
-        home_bonus = ELO_HOME_BONUS
+    home_bonus = home_elo_bonus(home, competition)
 
     diff = (elo_home + home_bonus) - elo_away
     win_expectancy = 1.0 / (1.0 + 10 ** (-diff / 400.0))
@@ -425,12 +505,7 @@ def expected_goals(home, away, schedule_rows=None, competition="FIFA World Cup")
 
 def league_scoring_average(schedule_rows, window_days=730):
     """Average goals per team per match across recent completed matches."""
-    cutoff = None
-    try:
-        from datetime import timedelta
-        cutoff = date.today() - timedelta(days=window_days)
-    except Exception:  # noqa: BLE001
-        pass
+    cutoff = date.today() - timedelta(days=window_days)
     total, n = 0.0, 0
     for g in schedule_rows:
         if g.get("status") != "completed":

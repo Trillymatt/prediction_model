@@ -73,6 +73,16 @@ def _require_soccer():
         )
 
 
+def _soccer_data_error(exc: Exception) -> HTTPException:
+    """A Supabase/network failure at request time (e.g. soccer tables not
+    created yet, RLS denying reads) -> a 503 with a hint instead of a raw 500."""
+    return HTTPException(
+        status_code=503,
+        detail=f"Soccer data unavailable ({exc}). If this is a fresh setup, "
+               f"run the SQL + backfill in SOCCER_SETUP.md.",
+    )
+
+
 app = FastAPI(title="Money From a Baby API", version="1.0")
 
 # Dev-friendly CORS so the Vite dev server can call us directly if it isn't
@@ -184,7 +194,10 @@ def soccer_players(q: str = Query("", description="name fragment"),
                    limit: int = Query(10, ge=1, le=25)):
     """Player autocomplete from soccer_players (or the logs as fallback)."""
     _require_soccer()
-    return {"players": soccer_engine.search_players(q, limit=limit)}
+    try:
+        return {"players": soccer_engine.search_players(q, limit=limit)}
+    except Exception as exc:  # noqa: BLE001 - tables missing / RLS / network
+        raise _soccer_data_error(exc)
 
 
 @app.get("/api/soccer/project")
@@ -203,13 +216,18 @@ def soccer_project(
         )
     except (LookupError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:  # noqa: BLE001 - tables missing / RLS / network
+        raise _soccer_data_error(exc)
 
 
 @app.get("/api/soccer/games")
 def soccer_games(days: int = Query(10, ge=1, le=60)):
     """Upcoming matches in the next `days` days (World Cup games first)."""
     _require_soccer()
-    return {"games": soccer_game_engine.upcoming_games(days=days)}
+    try:
+        return {"games": soccer_game_engine.upcoming_games(days=days)}
+    except Exception as exc:  # noqa: BLE001 - tables missing / RLS / network
+        raise _soccer_data_error(exc)
 
 
 @app.get("/api/soccer/game")
@@ -229,6 +247,8 @@ def soccer_game(
         )
     except (LookupError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:  # noqa: BLE001 - tables missing / RLS / network
+        raise _soccer_data_error(exc)
 
 
 # --- Static frontend (production) -------------------------------------------

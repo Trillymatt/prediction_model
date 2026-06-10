@@ -438,14 +438,30 @@ function sortSoccerStats(stats) {
   });
 }
 
+const recClassFor = (label) =>
+  label === "STRONG" ? "strong" : label === "LEAN" ? "lean" : "pass";
+
+function FactorList({ title, factors }) {
+  if (!factors || factors.length === 0) return null;
+  return (
+    <div className="why">
+      <h3>{title}</h3>
+      {factors.map((f, i) => (
+        <div className="factor" key={i}>
+          <div className="factor-head">
+            <span className="factor-title">{f.title}</span>
+            <span className="factor-value">{f.value}</span>
+          </div>
+          <div className="factor-detail">{f.detail}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function SoccerResultCard({ r }) {
   const loc = r.home_away === "AWAY" ? "@" : "vs";
-  const recClass =
-    r.confidence_label === "STRONG"
-      ? "strong"
-      : r.confidence_label === "LEAN"
-      ? "lean"
-      : "pass";
+  const recClass = recClassFor(r.confidence_label);
 
   return (
     <div className="card result">
@@ -483,9 +499,7 @@ function SoccerResultCard({ r }) {
           </div>
         </>
       )}
-      {r.line != null && !r.recommendation && r.note && (
-        <div className="note">{r.note}</div>
-      )}
+      {r.note && <div className="note">{r.note}</div>}
 
       <div className="splits">
         <div>
@@ -506,20 +520,7 @@ function SoccerResultCard({ r }) {
         </div>
       </div>
 
-      {r.factors && r.factors.length > 0 && (
-        <div className="why">
-          <h3>Why this projection</h3>
-          {r.factors.map((f, i) => (
-            <div className="factor" key={i}>
-              <div className="factor-head">
-                <span className="factor-title">{f.title}</span>
-                <span className="factor-value">{f.value}</span>
-              </div>
-              <div className="factor-detail">{f.detail}</div>
-            </div>
-          ))}
-        </div>
-      )}
+      <FactorList title="Why this projection" factors={r.factors} />
     </div>
   );
 }
@@ -552,12 +553,7 @@ function ThreeWayBar({ r }) {
 }
 
 function SoccerGameCard({ r }) {
-  const recClass =
-    r.confidence_label === "STRONG"
-      ? "strong"
-      : r.confidence_label === "LEAN"
-      ? "lean"
-      : "pass";
+  const recClass = recClassFor(r.confidence_label);
   const pickText =
     r.predicted_outcome === "Draw" ? "Draw" : `${r.predicted_outcome} wins`;
 
@@ -622,20 +618,7 @@ function SoccerGameCard({ r }) {
         </div>
       )}
 
-      {r.factors && r.factors.length > 0 && (
-        <div className="why">
-          <h3>Why this call</h3>
-          {r.factors.map((f, i) => (
-            <div className="factor" key={i}>
-              <div className="factor-head">
-                <span className="factor-title">{f.title}</span>
-                <span className="factor-value">{f.value}</span>
-              </div>
-              <div className="factor-detail">{f.detail}</div>
-            </div>
-          ))}
-        </div>
-      )}
+      <FactorList title="Why this call" factors={r.factors} />
     </div>
   );
 }

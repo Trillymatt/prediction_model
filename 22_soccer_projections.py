@@ -97,15 +97,15 @@ LOG_COLUMNS = [
 
 
 def _enable_optional_stats():
-    """Activate passes/tackles/... if their columns exist in Supabase."""
-    optional_cols = sorted({c for cols in OPTIONAL_STAT_DEFS.values() for c in cols})
-    active = []
-    for col in optional_cols:
-        try:
-            sc.supabase.table(sc.LOGS_TABLE).select(col).limit(1).execute()
-            active.append(col)
-        except Exception:  # noqa: BLE001 - column absent => stat stays off
-            continue
+    """Activate passes/tackles/... if their columns exist in Supabase.
+
+    Uses the shared probe in soccer_common so this engine and the log puller
+    (21) always agree on which optional columns are live.
+    """
+    try:
+        active = sc.optional_log_columns()
+    except Exception:  # noqa: BLE001 - probe failure => stats stay off
+        return
     for stat, cols in OPTIONAL_STAT_DEFS.items():
         if all(c in active for c in cols):
             STAT_DEFS[stat] = cols
@@ -182,10 +182,17 @@ def fetch_player_logs(player_id) -> list:
 
 
 def next_match_for_team(team: str, schedule_rows):
-    """(opponent, home_away, match_date, competition) for a team's next match."""
+    """(opponent, home_away, match_date, competition) for a team's next match.
+
+    Only matches dated today or later count -- a postponed fixture can sit in
+    the table as 'upcoming' with a past date forever, and rows are ordered
+    oldest-first, so without the filter it would shadow the real next match.
+    """
+    from datetime import date
+    today = date.today().isoformat()
     team = sc.normalize_team(team)
     for g in schedule_rows:
-        if g.get("status") != "upcoming":
+        if g.get("status") != "upcoming" or (g.get("match_date") or "") < today:
             continue
         home = sc.normalize_team(g.get("home_team"))
         away = sc.normalize_team(g.get("away_team"))
@@ -370,22 +377,41 @@ def project_soccer_player(player_name: str, stat: str, line: float = None,
             team, schedule)
     opponent = sc.normalize_team(opponent) if opponent else None
 
+    # An explicitly-passed opponent arrives without orientation. Look for the
+    # real fixture between the two teams first; failing that, assume the WC
+    # host (if either side is one) is the home team, so the host Elo edge
+    # lands on the right side either way.
+    if opponent and home_away is None:
+        for g in schedule:
+            if g.get("status") != "upcoming":
+                continue
+            h = sc.normalize_team(g.get("home_team"))
+            a = sc.normalize_team(g.get("away_team"))
+            if {h, a} == {team, opponent}:
+                home_away = "HOME" if team == h else "AWAY"
+                next_date = next_date or g.get("match_date")
+                competition = competition or g.get("competition")
+                break
+        if home_away is None:
+            home_away = "AWAY" if opponent in sc.WC_HOSTS else "HOME"
+
     matchup = None
     xg_info = {"team_lambda": None, "team_norm": None, "opp_elo": None}
     if opponent and team:
-        # Orient the fixture: who's nominal home doesn't matter much at a
-        # mostly-neutral World Cup, but host edge is handled inside.
+        # Orient the fixture so the host bonus lands on the right side.
         if home_away == "AWAY":
             xg = sc.expected_goals(opponent, team, schedule_rows=schedule,
                                    competition=competition or "FIFA World Cup")
             team_lambda, opp_elo = xg["lambda_away"], xg["elo_home"]
+            team_gf = xg["away_gf"]
         else:
             xg = sc.expected_goals(team, opponent, schedule_rows=schedule,
                                    competition=competition or "FIFA World Cup")
             team_lambda, opp_elo = xg["lambda_home"], xg["elo_away"]
-        team_form = sc.team_recent_form(schedule, team)
-        team_norm = (sum(m["scored"] for m in team_form) / len(team_form)
-                     if team_form else xg["league_avg_goals"])
+            team_gf = xg["home_gf"]
+        # Norm = the same recent scoring rate expected_goals used, so the
+        # matchup ratio's numerator and denominator can never diverge.
+        team_norm = team_gf if team_gf else xg["league_avg_goals"]
         if team_norm:
             raw = team_lambda / team_norm
             matchup = min(MATCHUP_MAX,
@@ -441,14 +467,26 @@ def project_soccer_player(player_name: str, stat: str, line: float = None,
         if distribution == "poisson":
             # Smoothing floor: a player with zero career events still has SOME
             # chance of one tomorrow -- never grade a line at 100%.
-            p_over = sc.poisson_p_over(line, max(projection, 0.05))
+            p_over, p_push, p_under = sc.poisson_line_probs(
+                line, max(projection, 0.05))
+            # On whole-number lines a push refunds the bet, so the decision
+            # probabilities are conditional on the bet actually settling.
+            settle = p_over + p_under
+            if settle > 0:
+                p_over, p_under = p_over / settle, p_under / settle
+            if p_push > 0.02:
+                result["p_push"] = round(p_push, 4)
+                result["note"] = (
+                    f"Whole-number line: {p_push * 100:.0f}% chance of a push "
+                    f"(refund). Probabilities shown assume the bet settles."
+                )
         elif sigma:
             p_over = sc.normal_cdf((projection - line) / sigma)
+            p_under = 1.0 - p_over
         else:
             result["note"] = ("Not enough match history to estimate spread; "
                               "showing projection only.")
             return result
-        p_under = 1.0 - p_over
         pick = "OVER" if p_over >= 0.5 else "UNDER"
         confidence = max(p_over, p_under)
         result.update({

@@ -21,6 +21,16 @@ create table if not exists soccer_players (
 
 -- b) Tie each log row to its match so re-runs upsert instead of duplicating.
 alter table soccer_player_match_logs add column if not exists match_id int4;
+
+-- ONLY if the pipeline ran before this migration AND you have no data of
+-- your own in the table: clear the match_id-less rows it wrote, because
+-- NULLs never conflict with the unique index (Postgres treats NULLs as
+-- distinct) and the next upsert would duplicate them. The backfill below
+-- re-fetches everything, so nothing is lost:
+--   delete from soccer_player_match_logs where match_id is null;
+-- If you've loaded rows from your own source, KEEP them -- they're only at
+-- risk of duplication if they describe matches the ESPN puller also covers.
+
 create unique index if not exists soccer_logs_player_match_uq
   on soccer_player_match_logs (player_id, match_id);
 ```

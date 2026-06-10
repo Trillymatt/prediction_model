@@ -74,16 +74,15 @@ OPTIONAL_STAT_MAP = {
 
 
 def optional_columns_present():
-    """Which optional log columns actually exist in Supabase right now."""
-    cols = sorted(set(OPTIONAL_STAT_MAP.values()))
-    present = set()
-    for col in cols:
-        try:
-            sc.supabase.table(LOGS_TABLE).select(col).limit(1).execute()
-            present.add(col)
-        except Exception:  # noqa: BLE001 - column absent
-            pass
-    return present
+    """Which optional log columns actually exist in Supabase right now.
+
+    Shared probe (soccer_common.optional_log_columns) so the puller and the
+    projection engine can never disagree about which columns are live.
+    """
+    try:
+        return sc.optional_log_columns()
+    except Exception:  # noqa: BLE001 - probe failure => write base columns only
+        return set()
 
 
 # ---------------------------------------------------------------------------
