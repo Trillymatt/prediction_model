@@ -73,7 +73,7 @@ LEAGUES = {
     "conmebol.america": "Copa América",
     "concacaf.gold": "CONCACAF Gold Cup",
     "caf.nations": "Africa Cup of Nations",
-    "afc.asiancup": "AFC Asian Cup",
+    "afc.asian.cup": "AFC Asian Cup",
 }
 COMPETITION_TO_SLUG = {v: k for k, v in LEAGUES.items()}
 

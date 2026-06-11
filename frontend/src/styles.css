@@ -168,6 +168,11 @@ select:focus {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  /* Long slates (World Cup group stage) scroll inside the card instead of
+     pushing the prediction below the fold. */
+  max-height: 340px;
+  overflow-y: auto;
+  padding-right: 2px;
 }
 
 .game-pick {

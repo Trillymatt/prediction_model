@@ -49,9 +49,12 @@ alter table soccer_player_match_logs
 ```
 
 Notes on existing columns: `xg`, `xa` and `key_passes` stay NULL when data
-comes from the ESPN feed (it doesn't publish them). If you load logs from a
-source that has them (FBref/Opta-style), the engine uses them where present;
-nothing breaks while they're NULL.
+comes from the ESPN feed (it doesn't publish them). `passes` is filled for
+FIFA World Cup matches by `24_soccer_fifa_passes.py` (FIFA's official match
+API -- runs in the nightly pipeline after 21); other competitions stay NULL
+because no free source carries pass data for them anymore (FBref lost its
+Opta feed in 2025). The engine uses whatever is present; nothing breaks
+while a column is NULL.
 
 ## 2. Seed the data (one-time, ~10 minutes)
 

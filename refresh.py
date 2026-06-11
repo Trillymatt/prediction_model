@@ -13,7 +13,7 @@ When it does run, it executes the pipeline in dependency order:
     01 game logs -> 02 team stats -> 03 schedule -> 04 players ->
     05 defense-vs-pos -> 06 averages -> 07 head-to-head -> 08 injuries ->
     10 rebuild training data -> 11 retrain model -> 12/13 game model ->
-    20 soccer schedule -> 21 soccer player logs
+    20 soccer schedule -> 21 soccer player logs -> 24 FIFA pass stats
 
 The gate also checks soccer_schedule, so during the World Cup the soccer
 data refreshes nightly even on NBA off-nights (and vice versa).
@@ -43,7 +43,8 @@ if not SUPABASE_URL or not SUPABASE_KEY:
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # Pipeline, in dependency order. (04 players before 05; 01 before 05/06/07/10;
-# 10 before 11; 12 before 13; soccer: 20 schedule before 21 player logs.)
+# 10 before 11; 12 before 13; soccer: 20 schedule before 21 player logs before
+# 24 pass enrichment.)
 PIPELINE = [
     "01_nba_data_pull.py",
     "02_team_stats.py",
@@ -59,6 +60,7 @@ PIPELINE = [
     "13_train_game_model.py",
     "20_soccer_schedule.py",
     "21_soccer_player_logs.py",
+    "24_soccer_fifa_passes.py",
 ]
 
 

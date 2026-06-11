@@ -15,8 +15,11 @@ from data and tells you honestly how confident the data is.
 How it differs from the NBA engine (because soccer is different):
   * Per-90 rates, not per-game averages. National-team players don't play
     together often, so the form blend covers their international appearances
-    over the last couple of years (L5 50% / L10 30% / all 20%), normalized
-    to 90 minutes and scaled by the minutes they're actually expected to play.
+    over the last couple of years, weighted by exponential time decay (a
+    match's weight halves every DECAY_HALF_LIFE_DAYS, friendlies count less),
+    normalized to 90 minutes and scaled by expected minutes. During a World
+    Cup this makes the tournament matches dominate while qualifiers and older
+    history still anchor the rate.
   * Poisson probabilities, not normal. Goals/assists/shots are small counts;
     P(over 0.5 goals) comes from the Poisson tail, which handles 0-and-1
     outcomes far better than a bell curve.
@@ -34,6 +37,7 @@ Setup:
     # fill in SUPABASE_URL and SUPABASE_KEY in .env
 """
 
+import re
 import math
 import argparse
 import statistics
@@ -41,12 +45,34 @@ import statistics
 import soccer_common as sc
 
 
+# ESPN stores accented names ("Kylian Mbappé", "Luka Modrić"); Postgres ilike
+# treats é and e as distinct, so a plain-ASCII search would miss them. We map
+# each base letter to a regex class of its accented variants and match with a
+# case-insensitive regex (PostgREST ~* via .filter("imatch")) instead.
+_ACCENT_CLASSES = {
+    "a": "aàáâãäåā", "c": "cç", "e": "eèéêëē", "g": "gğ", "i": "iìíîïı",
+    "n": "nñ", "o": "oòóôõöø", "s": "sšş", "u": "uùúûü", "y": "yýÿ", "z": "zž",
+}
+
+
+def _accent_regex(query: str) -> str:
+    """Build an accent-insensitive substring regex from a (partial) name."""
+    out = []
+    for ch in query:
+        cls = _ACCENT_CLASSES.get(ch.lower())
+        out.append(f"[{cls}]" if cls else re.escape(ch))
+    return "".join(out)
+
+
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-WEIGHT_L5 = 0.50
-WEIGHT_L10 = 0.30
-WEIGHT_ALL = 0.20
+# Recency: each match's weight halves every DECAY_HALF_LIFE_DAYS, so this
+# week's World Cup matches outweigh last year's qualifiers smoothly instead
+# of through flat L5/L10 windows (which for internationals can span years).
+# Friendlies are down-weighted on top: rotated squads, lower intensity.
+DECAY_HALF_LIFE_DAYS = 180
+FRIENDLY_WEIGHT = 0.7
 
 # How hard the team-vs-opponent goal expectation moves attacking stats.
 MATCHUP_DAMPENING = 0.60
@@ -62,13 +88,17 @@ STAT_DEFS = {
     "goals_assists": ["goals", "assists"],
     "shots": ["shots"],
     "shots_on_target": ["shots_on_target"],
-    "key_passes": ["key_passes"],
     "cards": ["yellow_cards", "red_cards"],
 }
 
-# Columns that may not exist yet (see SOCCER_SETUP.md). Probed once at
-# import; the stats appear automatically once the columns are added.
+# Stats whose columns may be missing (see SOCCER_SETUP.md) or present but
+# never populated -- ESPN's international feed provides no passes, tackles or
+# key passes, so those columns sit NULL until another source fills them.
+# Probed once at import: a stat is offered only when its columns exist AND
+# hold at least one real value, otherwise the engine would happily project
+# 0.00 from an all-NULL column.
 OPTIONAL_STAT_DEFS = {
+    "key_passes": ["key_passes"],
     "passes": ["passes"],
     "tackles": ["tackles"],
     "saves": ["saves"],
@@ -96,20 +126,38 @@ LOG_COLUMNS = [
 ]
 
 
-def _enable_optional_stats():
-    """Activate passes/tackles/... if their columns exist in Supabase.
+def _column_has_data(col: str) -> bool:
+    """Does any log row hold a non-NULL value for this column?"""
+    res = (
+        sc.supabase.table(sc.LOGS_TABLE)
+        .select(col).not_.is_(col, "null").limit(1).execute()
+    )
+    return bool(res.data)
 
-    Uses the shared probe in soccer_common so this engine and the log puller
-    (21) always agree on which optional columns are live.
+
+def _enable_optional_stats():
+    """Activate passes/tackles/... if their columns exist AND contain data.
+
+    Column existence uses the shared probe in soccer_common so this engine
+    and the log puller (21) always agree on which columns are live. The
+    data check is what keeps never-populated stats (key passes, passes --
+    ESPN's feed doesn't carry them) out of the dropdown.
     """
     try:
         active = sc.optional_log_columns()
     except Exception:  # noqa: BLE001 - probe failure => stats stay off
         return
     for stat, cols in OPTIONAL_STAT_DEFS.items():
-        if all(c in active for c in cols):
-            STAT_DEFS[stat] = cols
-            LOG_COLUMNS.extend(c for c in cols if c not in LOG_COLUMNS)
+        # key_passes is part of the base schema; the rest must pass the probe.
+        if not all(c in active or c in LOG_COLUMNS for c in cols):
+            continue
+        try:
+            if not all(_column_has_data(c) for c in cols):
+                continue
+        except Exception:  # noqa: BLE001 - probe failure => stat stays off
+            continue
+        STAT_DEFS[stat] = cols
+        LOG_COLUMNS.extend(c for c in cols if c not in LOG_COLUMNS)
 
 
 _enable_optional_stats()
@@ -123,11 +171,12 @@ def search_players(query: str, limit: int = 10) -> list:
     query = (query or "").strip()
     if len(query) < 2:
         return []
+    pattern = _accent_regex(query)
     try:
         res = (
             sc.supabase.table(sc.PLAYERS_TABLE)
             .select("player_id,player_name,team,position")
-            .ilike("player_name", f"%{query}%")
+            .filter("player_name", "imatch", pattern)
             .order("player_name")
             .limit(limit)
             .execute()
@@ -140,7 +189,7 @@ def search_players(query: str, limit: int = 10) -> list:
     res = (
         sc.supabase.table(sc.LOGS_TABLE)
         .select("player_id,player_name,team,match_date")
-        .ilike("player_name", f"%{query}%")
+        .filter("player_name", "imatch", pattern)
         .order("match_date", desc=True)
         .limit(200)
         .execute()
@@ -210,20 +259,35 @@ def match_value(row: dict, columns) -> float:
     return float(sum((row.get(c) or 0) for c in columns))
 
 
-def per90(rows, columns):
-    """Stat per 90 minutes across a window of logs (None if no minutes)."""
-    minutes = sum((r.get("minutes_played") or 0) for r in rows)
-    if not minutes:
+def match_weight(row: dict, today=None) -> float:
+    """Recency weight for one log row: exponential time decay x competition.
+
+    Halves every DECAY_HALF_LIFE_DAYS; friendlies get FRIENDLY_WEIGHT on top.
+    A row with no parseable date is treated as ancient, not discarded.
+    """
+    from datetime import date as _date
+    today = today or _date.today()
+    d = sc.parse_date(row.get("match_date"))
+    age_days = max(0, (today - d).days) if d else 10 * DECAY_HALF_LIFE_DAYS
+    w = 0.5 ** (age_days / DECAY_HALF_LIFE_DAYS)
+    if "friendly" in (row.get("competition") or "").lower():
+        w *= FRIENDLY_WEIGHT
+    return w
+
+
+def per90_decayed(rows, columns):
+    """Recency-weighted stat per 90 minutes (None if no weighted minutes).
+
+    Both the stat totals and the minutes are scaled by match_weight, so the
+    result is 'his per-90 rate, counting recent competitive matches most'.
+    """
+    weights = [match_weight(r) for r in rows]
+    w_minutes = sum(w * (r.get("minutes_played") or 0)
+                    for w, r in zip(weights, rows))
+    if not w_minutes:
         return None
-    total = sum(match_value(r, columns) for r in rows)
-    return total * 90.0 / minutes
-
-
-def blend(parts):
-    """Weighted average of the (value, weight) pairs that have a value."""
-    parts = [(v, w) for v, w in parts if v is not None]
-    total_w = sum(w for _, w in parts)
-    return sum(v * w for v, w in parts) / total_w if total_w else None
+    w_total = sum(w * match_value(r, columns) for w, r in zip(weights, rows))
+    return w_total * 90.0 / w_minutes
 
 
 # ---------------------------------------------------------------------------
@@ -236,15 +300,25 @@ def build_factors(result, stat, opponent, team, exp_minutes, matchup, xg,
     factors = []
 
     # 1) Recent form.
+    form_detail = (
+        f"International appearances: last 5 avg {result['l5']}, last 10 avg "
+        f"{result['l10']}, overall {result['avg']} per match. Rates are "
+        f"normalized to 90 minutes and time-decay weighted -- a match's "
+        f"weight halves every {DECAY_HALF_LIFE_DAYS} days and friendlies "
+        f"count less, so current tournament form leads while career "
+        f"history still anchors the rate."
+    )
+    stat_matches = result.get("stat_matches")
+    if stat_matches and stat_matches < result.get("games_used", 0):
+        form_detail += (
+            f" Note: {noun} are recorded for {stat_matches} of his "
+            f"{result['games_used']} appearances (the data source doesn't "
+            f"cover every match); only recorded matches feed the rate."
+        )
     factors.append({
         "title": "Recent form",
         "value": f"{result['per90_blend']} {noun} per 90",
-        "detail": (
-            f"International appearances: last 5 avg {result['l5']}, last 10 avg "
-            f"{result['l10']}, overall {result['avg']} per match. Rates are "
-            f"normalized to 90 minutes so substitute appearances don't "
-            f"understate him."
-        ),
+        "detail": form_detail,
     })
 
     # 2) Expected minutes.
@@ -318,9 +392,11 @@ def build_factors(result, stat, opponent, team, exp_minutes, matchup, xg,
             ),
         })
     else:
+        spread = (f" (± {result['sigma']})"
+                  if result.get("sigma") is not None else "")
         factors.append({
             "title": "Projection method",
-            "value": f"Normal → {result['projection']} (± {result['sigma']})",
+            "value": f"Normal → {result['projection']}{spread}",
             "detail": "High-volume stat, so a normal spread around the "
                       "projection grades the line.",
         })
@@ -355,15 +431,25 @@ def project_soccer_player(player_name: str, stat: str, line: float = None,
 
     team = sc.normalize_team(played[-1].get("team") or player.get("team"))
 
-    # --- Form blend (per-90, then scaled to expected minutes) ---------------
-    l5_rows, l10_rows = played[-5:], played[-10:]
-    per90_l5 = per90(l5_rows, columns)
-    per90_l10 = per90(l10_rows, columns)
-    per90_all = per90(played, columns)
-    per90_blend = blend([(per90_l5, WEIGHT_L5), (per90_l10, WEIGHT_L10),
-                         (per90_all, WEIGHT_ALL)])
+    # Rows that actually carry this stat. ESPN-fed stats are 0-filled on
+    # every row, but enriched stats (passes -- filled from FIFA's feed for
+    # World Cup matches only, see 24_soccer_fifa_passes.py) are NULL where
+    # no source covered the match. A NULL is "not recorded", not 0, so those
+    # rows must not drag the rate down -- they're excluded from the stat
+    # math while still counting toward expected minutes.
+    stat_rows = [g for g in played
+                 if any(g.get(c) is not None for c in columns)]
+    if not stat_rows:
+        raise LookupError(
+            f"No {STAT_NOUNS.get(stat, stat)} data recorded for "
+            f"{player['player_name']}'s matches yet (passes come from FIFA's "
+            f"World Cup feed, so they only exist for World Cup matches)."
+        )
 
-    minutes_recent = [g.get("minutes_played") or 0 for g in l5_rows]
+    # --- Form (time-decayed per-90, then scaled to expected minutes) --------
+    per90_blend = per90_decayed(stat_rows, columns)
+
+    minutes_recent = [g.get("minutes_played") or 0 for g in played[-5:]]
     exp_minutes = max(MIN_MINUTES_FLOOR,
                       min(90.0, sum(minutes_recent) / len(minutes_recent)))
 
@@ -423,7 +509,7 @@ def project_soccer_player(player_name: str, stat: str, line: float = None,
                    "opp_elo": opp_elo}
 
     # --- Spread + probabilities ----------------------------------------------
-    per_match = [match_value(g, columns) for g in played]
+    per_match = [match_value(g, columns) for g in stat_rows]
     distribution = "poisson" if projection < POISSON_MAX_MEAN else "normal"
     if distribution == "poisson":
         sigma = math.sqrt(projection) if projection > 0 else None
@@ -444,6 +530,7 @@ def project_soccer_player(player_name: str, stat: str, line: float = None,
         "match_date": next_date,
         "competition": competition,
         "games_used": len(played),
+        "stat_matches": len(stat_rows),
         "l5": round(sum(per_match[-5:]) / max(len(per_match[-5:]), 1), 2),
         "l10": round(sum(per_match[-10:]) / max(len(per_match[-10:]), 1), 2),
         "avg": round(sum(per_match) / len(per_match), 2),
