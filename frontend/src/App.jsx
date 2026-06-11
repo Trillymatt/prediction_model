@@ -119,6 +119,28 @@ function PlayerSearch({ selected, onSelect, searchFn = searchPlayers }) {
   );
 }
 
+// Wraps a freshly-loaded result card and scrolls it into view: on the game/
+// match outcome tabs the upcoming-games list sits above the card, so without
+// this the prediction renders off-screen and the user has to scroll to it.
+// Smooth scroll first; if the browser skipped the animation (reduced-motion
+// settings, some embedded webviews), snap instantly so it always lands.
+function ScrollIntoView({ children }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+    const fallback = setTimeout(() => {
+      const top = el.getBoundingClientRect().top;
+      if (top < -20 || top > window.innerHeight / 2) {
+        el.scrollIntoView({ block: "start" });
+      }
+    }, 700);
+    return () => clearTimeout(fallback);
+  }, []);
+  return <div ref={ref}>{children}</div>;
+}
+
 function ConfidenceBar({ pOver, pUnder }) {
   const overPct = Math.round(pOver * 100);
   return (
@@ -400,7 +422,11 @@ function GameView() {
         {error && <div className="error">{error}</div>}
       </div>
 
-      {result && <GameResultCard r={result} />}
+      {result && (
+        <ScrollIntoView>
+          <GameResultCard r={result} />
+        </ScrollIntoView>
+      )}
     </>
   );
 }
@@ -690,7 +716,11 @@ function SoccerGameView() {
         {error && <div className="error">{error}</div>}
       </div>
 
-      {result && <SoccerGameCard r={result} />}
+      {result && (
+        <ScrollIntoView>
+          <SoccerGameCard r={result} />
+        </ScrollIntoView>
+      )}
     </>
   );
 }

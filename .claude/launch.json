@@ -2,10 +2,39 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "api",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "uvicorn",
+        "api:app",
+        "--port",
+        "8000"
+      ],
+      "port": 8000
+    },
+    {
       "name": "frontend",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--prefix", "frontend"],
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--prefix",
+        "frontend"
+      ],
       "port": 5173,
+      "autoPort": true
+    },
+    {
+      "name": "lisa-website",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--prefix",
+        "/Users/mattknorman/Documents/GitHub/Lisa-Website"
+      ],
+      "port": 3000,
       "autoPort": true
     }
   ]
