@@ -31,11 +31,33 @@ Setup:
 """
 
 import os
+import re
 import importlib.util
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+
+
+# Player names are stored with their real accents ("Nikola Jokić", "Luka
+# Dončić"); Postgres ilike treats é/e, ć/c, etc. as distinct, so a plain-ASCII
+# autocomplete query would miss them. We map each base letter to a regex class
+# of its accented variants and match case-insensitively (PostgREST ~* via
+# .filter("imatch")) instead of ilike. The soccer engine carries its own copy
+# so the two endpoints stay independent.
+_ACCENT_CLASSES = {
+    "a": "aàáâãäåā", "c": "cçćč", "e": "eèéêëē", "g": "gğ", "i": "iìíîïıī",
+    "n": "nñń", "o": "oòóôõöø", "s": "sšş", "u": "uùúûü", "y": "yýÿ", "z": "zžź",
+}
+
+
+def _accent_regex(query: str) -> str:
+    """Build an accent-insensitive substring regex from a (partial) name."""
+    out = []
+    for ch in query:
+        cls = _ACCENT_CLASSES.get(ch.lower())
+        out.append(f"[{cls}]" if cls else re.escape(ch))
+    return "".join(out)
 
 
 def _load_numbered(module_name, filename):
@@ -117,7 +139,7 @@ def players(q: str = Query("", description="name fragment"),
     res = (
         engine.supabase.table(engine.PLAYERS_TABLE)
         .select("player_id,player_name,team,position")
-        .ilike("player_name", f"%{q}%")
+        .filter("player_name", "imatch", _accent_regex(q))
         .order("player_name")
         .limit(limit)
         .execute()

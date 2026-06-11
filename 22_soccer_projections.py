@@ -34,11 +34,31 @@ Setup:
     # fill in SUPABASE_URL and SUPABASE_KEY in .env
 """
 
+import re
 import math
 import argparse
 import statistics
 
 import soccer_common as sc
+
+
+# ESPN stores accented names ("Kylian Mbappé", "Luka Modrić"); Postgres ilike
+# treats é and e as distinct, so a plain-ASCII search would miss them. We map
+# each base letter to a regex class of its accented variants and match with a
+# case-insensitive regex (PostgREST ~* via .filter("imatch")) instead.
+_ACCENT_CLASSES = {
+    "a": "aàáâãäåā", "c": "cç", "e": "eèéêëē", "g": "gğ", "i": "iìíîïı",
+    "n": "nñ", "o": "oòóôõöø", "s": "sšş", "u": "uùúûü", "y": "yýÿ", "z": "zž",
+}
+
+
+def _accent_regex(query: str) -> str:
+    """Build an accent-insensitive substring regex from a (partial) name."""
+    out = []
+    for ch in query:
+        cls = _ACCENT_CLASSES.get(ch.lower())
+        out.append(f"[{cls}]" if cls else re.escape(ch))
+    return "".join(out)
 
 
 # ---------------------------------------------------------------------------
@@ -123,11 +143,12 @@ def search_players(query: str, limit: int = 10) -> list:
     query = (query or "").strip()
     if len(query) < 2:
         return []
+    pattern = _accent_regex(query)
     try:
         res = (
             sc.supabase.table(sc.PLAYERS_TABLE)
             .select("player_id,player_name,team,position")
-            .ilike("player_name", f"%{query}%")
+            .filter("player_name", "imatch", pattern)
             .order("player_name")
             .limit(limit)
             .execute()
@@ -140,7 +161,7 @@ def search_players(query: str, limit: int = 10) -> list:
     res = (
         sc.supabase.table(sc.LOGS_TABLE)
         .select("player_id,player_name,team,match_date")
-        .ilike("player_name", f"%{query}%")
+        .filter("player_name", "imatch", pattern)
         .order("match_date", desc=True)
         .limit(200)
         .execute()
