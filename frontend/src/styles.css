@@ -425,3 +425,184 @@ select:focus {
   color: var(--muted);
   line-height: 1.5;
 }
+
+/* ---- daily "My Picks" board ---- */
+.picks-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.picks-head label {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.picks-note {
+  margin-bottom: 10px;
+}
+
+.picks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pick-row {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  font-size: 15px;
+  color: var(--text);
+  background: var(--card-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.pick-row:hover,
+.pick-row.active {
+  border-color: var(--accent);
+}
+
+.pick-row.active {
+  background: rgba(240, 136, 62, 0.08);
+}
+
+.pick-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pick-name {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pick-claim {
+  font-weight: 700;
+  font-size: 14px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.pick-claim.over {
+  color: #4ac26b;
+}
+
+.pick-claim.under {
+  color: #ff7b72;
+}
+
+.pick-prob {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+/* Stat switcher inside an expanded pick ("Points · Rebounds · Assists"). */
+.pred-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.pred-tab {
+  padding: 6px 11px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--card-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.pred-tab.active {
+  color: #1a1100;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+/* The expanded pick reuses the result card; tone down its outer spacing so
+   it reads as part of the board. */
+.pick-detail > .card {
+  margin-top: 10px;
+}
+
+/* ---- mobile ---- */
+@media (max-width: 480px) {
+  .app {
+    padding: 20px 12px 64px;
+  }
+
+  header h1 {
+    font-size: 24px;
+  }
+
+  /* iOS Safari zooms into inputs under 16px — keep them at 16. */
+  input,
+  select {
+    font-size: 16px;
+  }
+
+  .row {
+    flex-wrap: wrap;
+  }
+
+  .row .field {
+    flex: 1 1 45%;
+    min-width: 130px;
+  }
+
+  .card {
+    padding: 16px 14px;
+  }
+
+  .tab {
+    padding: 10px 6px;
+    font-size: 13px;
+  }
+
+  .proj-num {
+    font-size: 42px;
+  }
+
+  .proj-num.game-score {
+    font-size: 34px;
+  }
+
+  .result-head h2 {
+    font-size: 19px;
+  }
+
+  .recommendation {
+    font-size: 18px;
+  }
+
+  .conf-bar-fill {
+    font-size: 11px;
+  }
+
+  .splits {
+    flex-wrap: wrap;
+  }
+
+  .splits > div {
+    flex: 1 1 40%;
+  }
+}

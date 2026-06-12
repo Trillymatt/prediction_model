@@ -25,6 +25,12 @@ export function projectStat({ player, stat, line, opponent, location, gameType }
   return getJSON(`/api/project?${params.toString()}`);
 }
 
+// Today's "My Picks" board. While the server is still computing the day's
+// board this returns { status: "building" } and the caller should poll.
+export function fetchDailyPicks(sport) {
+  return getJSON(`/api/picks?sport=${encodeURIComponent(sport)}`);
+}
+
 export function fetchUpcomingGames(days = 10) {
   return getJSON(`/api/games?days=${days}`).then((d) => d.games);
 }
