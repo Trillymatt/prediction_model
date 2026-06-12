@@ -14,6 +14,11 @@ headline claim, plus graded projections for the player's other stats, so the
 frontend can show "why" and "what else he's projected for" with zero extra
 round-trips when a pick is tapped.
 
+The same build also produces a per-game board ("games" in the payload): every
+game on the slate with its outcome projection (win prob / win-draw-win,
+factors and all) and the strongest player picks for that game, so the
+frontend's "Best Bets" tab can show the best bets game by game.
+
 Building a board costs a few hundred Supabase reads, so it can't run per page
 load: the first request of the day kicks off a background build (api.py also
 warms both sports at startup) and the result is cached in-process for the rest
@@ -38,6 +43,7 @@ from datetime import date
 BOARD_SIZE = 6          # picks shown per sport
 MAX_PER_TEAM = 3        # so a 2-team slate (Finals) still varies a little
 MAX_WORKERS = 4         # parallel engine calls during a build
+GAME_PICKS = 4          # player picks shown per game on the per-game board
 
 NBA_STATS = ("points", "rebounds", "assists")
 NBA_STAT_NOUNS = {"points": "Points", "rebounds": "Rebounds", "assists": "Assists"}
@@ -50,6 +56,10 @@ NBA_LADDERS = {
     "assists": (2, 4, 6, 8, 10, 12),
 }
 NBA_HEADLINE_MIN_P = 0.70
+# The per-game board accepts slightly less certain headlines than the daily
+# board so most games surface a best bet or two; the daily board keeps the
+# 0.70 floor, so its contents don't change.
+NBA_GAME_MIN_P = 0.60
 NBA_MIN_L10_MINUTES = 24.0   # "players that actually play"
 NBA_PLAYERS_PER_TEAM = 5
 
@@ -165,10 +175,13 @@ def _nba_candidates(nba, team_abbrs):
     from nba_api.stats.static import teams as static_teams
 
     # nba_players.team stores nicknames ("Knicks"); accept full names too.
-    wanted = set()
+    # Keep the abbreviation per name so each pick can be tied back to its
+    # game on the per-game board.
+    wanted = {}
     for t in static_teams.get_teams():
         if t["abbreviation"] in team_abbrs:
-            wanted.update((t["nickname"], t["full_name"]))
+            wanted[t["nickname"]] = t["abbreviation"]
+            wanted[t["full_name"]] = t["abbreviation"]
     if not wanted:
         return []
 
@@ -198,6 +211,7 @@ def _nba_candidates(nba, team_abbrs):
         if l10_minutes < NBA_MIN_L10_MINUTES:
             continue
         r["_l10_minutes"] = l10_minutes
+        r["_abbr"] = wanted.get(r["team"])
         by_team.setdefault(r["team"], []).append(r)
 
     out = []
@@ -223,12 +237,20 @@ def _nba_player_pick(nba, cand, slate_date):
     if not results:
         return None
 
+    # Board-grade headline first; if nothing clears 0.70, fall back to the
+    # looser per-game floor so the game board can still show this player's
+    # best claim. (Such picks have p < 0.70 by construction — a rung at or
+    # above 0.70 would have been found by the first pass — so the daily
+    # board's >= 0.70 filter naturally excludes them.)
     headline = None  # (stat, milestone, p)
-    for stat, r in results.items():
-        hit = _best_milestone(r["projection"], r["sigma"],
-                              NBA_LADDERS[stat], NBA_HEADLINE_MIN_P, nba.normal_cdf)
-        if hit and (headline is None or hit[1] > headline[2]):
-            headline = (stat, hit[0], hit[1])
+    for min_p in (NBA_HEADLINE_MIN_P, NBA_GAME_MIN_P):
+        for stat, r in results.items():
+            hit = _best_milestone(r["projection"], r["sigma"],
+                                  NBA_LADDERS[stat], min_p, nba.normal_cdf)
+            if hit and (headline is None or hit[1] > headline[2]):
+                headline = (stat, hit[0], hit[1])
+        if headline is not None:
+            break
     if headline is None:
         return None
 
@@ -250,6 +272,7 @@ def _nba_player_pick(nba, cand, slate_date):
         "player_id": cand["player_id"],
         "player_name": r0["player_name"],
         "team": r0["team"],
+        "team_abbr": cand.get("_abbr"),
         "position": r0["position"],
         "opponent": r0["opponent"],
         "home_away": r0["home_away"],
@@ -284,9 +307,33 @@ def _build_nba():
                 picks.append(res)
 
     picks.sort(key=lambda p: p["probability"], reverse=True)
+    board = _cap_board([p for p in picks if p["probability"] >= NBA_HEADLINE_MIN_P])
+
+    # Per-game board: each slate game with its outcome projection and the
+    # strongest player picks for that game.
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
+        outcomes = list(pool.map(
+            lambda g: _swallow(nba_game.project_game, g["home_team"],
+                               g["away_team"], g["game_date"], g["game_id"]),
+            slate,
+        ))
+    games_board = []
+    for g, outcome in zip(slate, outcomes):
+        teams = (g["home_team"], g["away_team"])
+        games_board.append({
+            "game_id": g["game_id"],
+            "game_date": g["game_date"],
+            "home_team": g["home_team"],
+            "away_team": g["away_team"],
+            "outcome": outcome,
+            "picks": [p for p in picks
+                      if p.get("team_abbr") in teams][:GAME_PICKS],
+        })
+
     note = (None if slate_date == date.today().isoformat()
             else f"No games today — showing the {slate_date} slate.")
-    return {"slate_date": slate_date, "picks": _cap_board(picks), "note": note}
+    return {"slate_date": slate_date, "picks": board, "games": games_board,
+            "note": note}
 
 
 # ---------------------------------------------------------------------------
@@ -367,6 +414,7 @@ def _soccer_player_pick(soccer, cand):
         "player_id": r0.get("player_id"),
         "player_name": r0["player_name"],
         "team": r0["team"],
+        "slate_team": cand["team"],
         "position": r0.get("position"),
         "opponent": r0.get("opponent"),
         "home_away": r0.get("home_away"),
@@ -419,9 +467,32 @@ def _build_soccer():
             if r:
                 p["predictions"].append(r)
 
+    # Per-game board: each slate match with its outcome projection (win /
+    # draw / win) and the strongest player picks for that match.
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
+        outcomes = list(pool.map(
+            lambda g: _swallow(soccer_game.project_soccer_game, g["home_team"],
+                               g["away_team"], g["match_date"], g["match_id"]),
+            slate,
+        ))
+    games_board = []
+    for g, outcome in zip(slate, outcomes):
+        match_teams = (g["home_team"], g["away_team"])
+        games_board.append({
+            "game_id": g["match_id"],
+            "game_date": g["match_date"],
+            "home_team": g["home_team"],
+            "away_team": g["away_team"],
+            "competition": g.get("competition"),
+            "outcome": outcome,
+            "picks": [p for p in picks
+                      if p.get("slate_team") in match_teams][:GAME_PICKS],
+        })
+
     note = (None if slate_date == date.today().isoformat()
             else f"No matches today — showing the {slate_date} slate.")
-    return {"slate_date": slate_date, "picks": board, "note": note}
+    return {"slate_date": slate_date, "picks": board, "games": games_board,
+            "note": note}
 
 
 def _swallow(fn, *args):
@@ -503,6 +574,7 @@ def _public(sport, today, entry):
         "status": entry["status"],
         "slate_date": entry.get("slate_date"),
         "picks": entry.get("picks", []),
+        "games": entry.get("games", []),
         "note": entry.get("note"),
         "error": entry.get("error"),
     }
@@ -528,6 +600,21 @@ def main():
               f"({p['team']} {vs})  {p['headline']}")
     if not body["picks"]:
         print("  (no picks)")
+
+    for g in body.get("games", []):
+        o = g.get("outcome")
+        call = "(no outcome projection)"
+        if o:
+            winner = o.get("predicted_winner") or o.get("predicted_outcome")
+            conf = o.get("confidence") or max(o.get("p_home_win", 0),
+                                              o.get("p_away_win", 0))
+            call = f"{winner} ({conf * 100:.0f}%)"
+        print(f"\n  {g['away_team']} @ {g['home_team']}  ->  {call}")
+        for p in g["picks"]:
+            print(f"    {p['probability'] * 100:5.1f}%  {p['player_name']:<22} "
+                  f"{p['headline']}")
+        if not g["picks"]:
+            print("    (no confident player picks)")
 
 
 if __name__ == "__main__":

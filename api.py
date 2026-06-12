@@ -134,9 +134,10 @@ def warm_daily_picks():
 
 @app.get("/api/picks")
 def picks(sport: str = Query("nba", description="nba | soccer")):
-    """Today's "My Picks" board: the model's most confident calls for the
-    slate. Returns status=building while the daily board is being computed;
-    the frontend polls until it's ready."""
+    """Today's boards: the "My Picks" list (the model's most confident calls
+    for the slate) plus the per-game board ("games": every slate game with its
+    outcome projection and strongest player picks). Returns status=building
+    while the daily build is running; the frontend polls until it's ready."""
     sport = sport.lower()
     if sport not in ("nba", "soccer"):
         raise HTTPException(status_code=400, detail="sport must be nba or soccer")

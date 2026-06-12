@@ -544,6 +544,44 @@ select:focus {
   margin-top: 10px;
 }
 
+/* ---- per-game "Best Bets" board ---- */
+/* "Explanation" drop-down: the game card's factor list stays hidden until
+   tapped, so the win call reads at a glance. */
+.why-toggle {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 13px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  background: var(--card-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.why-toggle:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.why-caret {
+  font-size: 10px;
+}
+
+.bets-title {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin: 18px 0 10px;
+}
+
 /* ---- mobile ---- */
 @media (max-width: 480px) {
   .app {
