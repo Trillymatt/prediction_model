@@ -5,6 +5,7 @@ import {
   projectStat,
   fetchUpcomingGames,
   projectGame,
+  fetchDailyPicks,
   fetchSoccerStats,
   searchSoccerPlayers,
   projectSoccerStat,
@@ -357,6 +358,125 @@ function GameResultCard({ r }) {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// ===========================================================================
+// Daily "My Picks" board
+// ===========================================================================
+// The server builds one board per sport per day (the model's most confident
+// calls for today's slate) and caches it; while it's still computing we get
+// status "building" and poll. Tapping a pick expands the full projection
+// card — same component as a manual search — plus tabs for the player's
+// other projected stats, so "why" and "what else" are one tap away.
+function DailyPicks({ sport }) {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState("");
+  const [open, setOpen] = useState(-1);
+  const [predIdx, setPredIdx] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    let timer;
+    setData(null);
+    setError("");
+    setOpen(-1);
+    const load = () =>
+      fetchDailyPicks(sport)
+        .then((d) => {
+          if (cancelled) return;
+          setData(d);
+          if (d.status === "building") timer = setTimeout(load, 4000);
+        })
+        .catch((e) => {
+          if (!cancelled) setError(e.message);
+        });
+    load();
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [sport]);
+
+  // If picks aren't available (e.g. soccer tables not set up), stay out of
+  // the way — the search tool above still works.
+  if (error) return null;
+
+  const labels = sport === "soccer" ? SOCCER_STAT_LABELS : STAT_LABELS;
+  const Card = sport === "soccer" ? SoccerResultCard : ResultCard;
+  const picks = (data && data.picks) || [];
+
+  return (
+    <div className="card picks">
+      <div className="picks-head">
+        <label>🎯 My Picks{data?.slate_date ? ` · ${data.slate_date}` : ""}</label>
+        <span className="muted">the model's most confident calls today</span>
+      </div>
+
+      {!data && <div className="muted">Loading…</div>}
+      {data?.status === "building" && (
+        <div className="muted">
+          Building today's board — the first load of the day takes a minute…
+        </div>
+      )}
+      {data?.note && <div className="muted picks-note">{data.note}</div>}
+      {data?.status === "ready" && picks.length === 0 && (
+        <div className="muted">No confident picks for this slate.</div>
+      )}
+
+      <div className="picks-list">
+        {picks.map((p, i) => (
+          <div key={`${p.player_id}-${p.stat}`}>
+            <button
+              className={`pick-row ${open === i ? "active" : ""}`}
+              onClick={() => {
+                setOpen(open === i ? -1 : i);
+                setPredIdx(0);
+              }}
+            >
+              <span className="pick-left">
+                <span className="pick-name">{p.player_name}</span>
+                <span className="muted">
+                  {p.team}
+                  {p.opponent
+                    ? ` ${p.home_away === "AWAY" ? "@" : "vs"} ${p.opponent}`
+                    : ""}
+                </span>
+              </span>
+              <span
+                className={`pick-claim ${
+                  p.direction === "UNDER" ? "under" : "over"
+                }`}
+              >
+                {p.headline}
+                <span className="pick-prob">
+                  {Math.round(p.probability * 100)}%
+                </span>
+              </span>
+            </button>
+
+            {open === i && (
+              <div className="pick-detail">
+                {p.predictions.length > 1 && (
+                  <div className="pred-tabs">
+                    {p.predictions.map((r, j) => (
+                      <button
+                        key={j}
+                        className={`pred-tab ${predIdx === j ? "active" : ""}`}
+                        onClick={() => setPredIdx(j)}
+                      >
+                        {labels[r.stat] || r.stat}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <Card r={p.predictions[predIdx] || p.predictions[0]} />
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -814,7 +934,13 @@ function SoccerPropsView() {
         {error && <div className="error">{error}</div>}
       </div>
 
-      {result && <SoccerResultCard r={result} />}
+      {result && (
+        <ScrollIntoView>
+          <SoccerResultCard r={result} />
+        </ScrollIntoView>
+      )}
+
+      <DailyPicks sport="soccer" />
     </>
   );
 }
@@ -968,7 +1094,13 @@ export default function App() {
       </div>
       )}
 
-      {sport === "nba" && mode === "props" && result && <ResultCard r={result} />}
+      {sport === "nba" && mode === "props" && result && (
+        <ScrollIntoView>
+          <ResultCard r={result} />
+        </ScrollIntoView>
+      )}
+
+      {sport === "nba" && mode === "props" && <DailyPicks sport="nba" />}
     </div>
   );
 }

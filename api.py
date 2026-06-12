@@ -17,6 +17,7 @@ Endpoints
   GET /api/project?player=&stat=&...    projection + confidence for a line
   GET /api/games                        upcoming games (next 10 days)
   GET /api/game?home=&away=&...         game outcome: win prob + projected score
+  GET /api/picks?sport=nba|soccer       today's "My Picks" board (cached daily)
 
 Soccer (World Cup) -- same shapes, three-way outcomes:
   GET /api/soccer/stats                 supported soccer stats
@@ -86,6 +87,14 @@ except Exception as exc:  # noqa: BLE001 - soccer must never break NBA
     soccer_engine = soccer_game_engine = None
     _soccer_load_error = str(exc)
 
+# Daily "My Picks" boards (computed in the background, cached per day).
+import daily_picks
+
+daily_picks.init(
+    nba=engine, nba_game=game_engine,
+    soccer=soccer_engine, soccer_game=soccer_game_engine,
+)
+
 
 def _require_soccer():
     if soccer_engine is None or soccer_game_engine is None:
@@ -115,6 +124,25 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+def warm_daily_picks():
+    """Start building today's pick boards so the first visitor doesn't wait."""
+    daily_picks.warm()
+
+
+@app.get("/api/picks")
+def picks(sport: str = Query("nba", description="nba | soccer")):
+    """Today's "My Picks" board: the model's most confident calls for the
+    slate. Returns status=building while the daily board is being computed;
+    the frontend polls until it's ready."""
+    sport = sport.lower()
+    if sport not in ("nba", "soccer"):
+        raise HTTPException(status_code=400, detail="sport must be nba or soccer")
+    if sport == "soccer":
+        _require_soccer()
+    return daily_picks.get_picks(sport)
 
 
 @app.get("/api/health")
