@@ -59,6 +59,15 @@ function PlayerSearch({ selected, onSelect, searchFn = searchPlayers }) {
   const [results, setResults] = useState([]);
   const [open, setOpen] = useState(false);
   const boxRef = useRef(null);
+  const inputRef = useRef(null);
+
+  const clear = () => {
+    setQuery("");
+    setResults([]);
+    setOpen(false);
+    if (selected) onSelect(null);
+    inputRef.current?.focus();
+  };
 
   // Debounced search as the user types.
   useEffect(() => {
@@ -85,17 +94,30 @@ function PlayerSearch({ selected, onSelect, searchFn = searchPlayers }) {
   return (
     <div className="field player-search" ref={boxRef}>
       <label>Player</label>
-      <input
-        type="text"
-        placeholder="Search a player…"
-        value={query}
-        onChange={(e) => {
-          setQuery(e.target.value);
-          setOpen(true);
-          if (selected) onSelect(null);
-        }}
-        onFocus={() => setOpen(true)}
-      />
+      <div className="input-wrap">
+        <input
+          ref={inputRef}
+          type="text"
+          placeholder="Search a player…"
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setOpen(true);
+            if (selected) onSelect(null);
+          }}
+          onFocus={() => setOpen(true)}
+        />
+        {query && (
+          <button
+            type="button"
+            className="clear-input"
+            aria-label="Clear player"
+            onClick={clear}
+          >
+            ×
+          </button>
+        )}
+      </div>
       {open && results.length > 0 && (
         <ul className="dropdown">
           {results.map((p) => (
