@@ -1164,7 +1164,7 @@ function SlipLegCard({ leg }) {
         {leg.projection != null && (
           <div>
             <span className="muted">Projection</span>
-            <b>{typeof leg.projection === "number" ? leg.projection : leg.projection}</b>
+            <b>{leg.projection}</b>
           </div>
         )}
         {leg.confidence_label && (

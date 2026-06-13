@@ -167,6 +167,7 @@ def _grade_with_engine(engine, leg, sport, *, soccer) -> dict | None:
         "player_name": r.get("player_name"),
         "team": r.get("team"),
         "opponent": r.get("opponent"),
+        "home_away": r.get("home_away"),
     }
 
 

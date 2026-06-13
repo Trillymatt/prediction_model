@@ -33,9 +33,11 @@ Setup:
 
 import os
 import re
+import functools
 import importlib.util
 
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -337,10 +339,14 @@ async def analyze_slip(image: UploadFile = File(..., description="bet-slip scree
         raise HTTPException(status_code=400, detail="Empty upload.")
     if len(data) > _MAX_SLIP_BYTES:
         raise HTTPException(status_code=400, detail="Image too large (max 10 MB).")
+    # analyze() makes blocking Gemini + Supabase calls; run it off the event
+    # loop so one slip doesn't freeze the rest of the API for several seconds.
+    work = functools.partial(
+        slip_analysis.analyze, data, mime,
+        nba_engine=engine, soccer_engine=soccer_engine,
+    )
     try:
-        return slip_analysis.analyze(
-            data, mime, nba_engine=engine, soccer_engine=soccer_engine,
-        )
+        return await run_in_threadpool(work)
     except llm_analysis.LLMUnavailable as exc:
         raise HTTPException(status_code=503, detail=str(exc))
 
