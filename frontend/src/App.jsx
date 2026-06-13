@@ -11,6 +11,7 @@ import {
   projectSoccerStat,
   fetchUpcomingSoccerGames,
   projectSoccerGame,
+  analyzeSlip,
 } from "./api.js";
 
 // Friendly labels for the stat dropdown.
@@ -1103,6 +1104,216 @@ function SoccerPropsView() {
   );
 }
 
+// ---- Bet-slip analyzer ------------------------------------------------------
+
+function pct(p) {
+  return p == null ? "–" : `${Math.round(p * 100)}%`;
+}
+
+function worryClass(level) {
+  if (level === "high") return "worry high";
+  if (level === "medium") return "worry medium";
+  if (level === "low") return "worry low";
+  return "worry unknown";
+}
+
+function HitBar({ p }) {
+  const w = p == null ? 0 : Math.round(p * 100);
+  const cls = p == null ? "" : p >= 0.55 ? "over" : p >= 0.45 ? "draw" : "under";
+  return (
+    <div className="conf-bar">
+      <div className={`conf-bar-fill ${cls}`} style={{ width: `${w}%` }}>
+        {w >= 16 && <span>{w}% to hit</span>}
+      </div>
+    </div>
+  );
+}
+
+function SlipLegCard({ leg }) {
+  const matchup =
+    leg.opponent ? ` ${leg.home_away === "AWAY" ? "@" : "vs"} ${leg.opponent}` : "";
+  return (
+    <div className="card slip-leg">
+      <div className="result-head">
+        <div>
+          <h3 className="leg-title">{leg.label}</h3>
+          <div className="muted">
+            {(leg.sport || "").toUpperCase()}
+            {leg.player_name && leg.player_name !== leg.label ? ` · ${leg.player_name}` : ""}
+            {matchup}
+          </div>
+        </div>
+        <div className="leg-badges">
+          <span className={`badge ${leg.source === "model" ? "model" : "heuristic"}`}>
+            {leg.source === "model"
+              ? "our model"
+              : leg.source === "gemini"
+              ? "Gemini"
+              : "no grade"}
+          </span>
+          <span className={worryClass(leg.worry_level)}>{leg.worry_level}</span>
+        </div>
+      </div>
+
+      <HitBar p={leg.hit_probability} />
+      <div className="leg-stat-row">
+        <div>
+          <span className="muted">Hit chance</span>
+          <b>{pct(leg.hit_probability)}</b>
+        </div>
+        {leg.projection != null && (
+          <div>
+            <span className="muted">Projection</span>
+            <b>{typeof leg.projection === "number" ? leg.projection : leg.projection}</b>
+          </div>
+        )}
+        {leg.confidence_label && (
+          <div>
+            <span className="muted">Grade</span>
+            <b>{leg.confidence_label}</b>
+          </div>
+        )}
+      </div>
+
+      {leg.concern && (
+        <div className={`leg-concern ${leg.worry_level === "high" ? "alarm" : ""}`}>
+          ⚠ {leg.concern}
+        </div>
+      )}
+      {leg.error && <div className="note">{leg.error}</div>}
+      {leg.note && <div className="note">{leg.note}</div>}
+
+      <FactorList title="Why" factors={leg.factors} />
+    </div>
+  );
+}
+
+function SlipParlaySummary({ parlay, betType }) {
+  if (!parlay) return null;
+  return (
+    <div className="card slip-summary">
+      <div className="result-head">
+        <h2>{betType === "parlay" ? "Parlay read" : "Bet read"}</h2>
+        {parlay.combined_probability != null && (
+          <span className="badge model">{pct(parlay.combined_probability)} to cash</span>
+        )}
+      </div>
+      <div className="splits">
+        <div>
+          <span className="muted">Legs</span>
+          <b>{parlay.leg_count}</b>
+        </div>
+        <div>
+          <span className="muted">Graded</span>
+          <b>{parlay.graded_count}</b>
+        </div>
+        {parlay.fair_decimal_odds != null && (
+          <div>
+            <span className="muted">Fair odds</span>
+            <b>{parlay.fair_decimal_odds}x</b>
+          </div>
+        )}
+      </div>
+
+      {parlay.worry_legs && parlay.worry_legs.length > 0 && (
+        <div className="why">
+          <h3>Legs to worry about</h3>
+          {parlay.worry_legs.map((w, i) => (
+            <div className="factor" key={i}>
+              <div className="factor-head">
+                <span className="factor-title">{w.label}</span>
+                <span className={worryClass(w.worry_level)}>{pct(w.hit_probability)}</span>
+              </div>
+              {w.concern && <div className="factor-detail">{w.concern}</div>}
+            </div>
+          ))}
+        </div>
+      )}
+      {parlay.note && <div className="note">{parlay.note}</div>}
+    </div>
+  );
+}
+
+function SlipAnalyzer() {
+  const [file, setFile] = useState(null);
+  const [preview, setPreview] = useState("");
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const onPick = (f) => {
+    if (!f) return;
+    setFile(f);
+    setResult(null);
+    setError("");
+    setPreview(URL.createObjectURL(f));
+  };
+
+  const run = async () => {
+    if (!file) {
+      setError("Pick a screenshot of your line or parlay first.");
+      return;
+    }
+    setError("");
+    setLoading(true);
+    setResult(null);
+    try {
+      setResult(await analyzeSlip(file));
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="card controls">
+        <p className="muted">
+          Upload a screenshot of your bet slip or parlay. We grade NBA &amp; World
+          Cup player props with our own model and use Gemini for anything else,
+          then flag the legs most likely to bust it.
+        </p>
+        <label
+          className="slip-drop"
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => {
+            e.preventDefault();
+            onPick(e.dataTransfer.files?.[0]);
+          }}
+        >
+          {preview ? (
+            <img src={preview} alt="bet slip preview" className="slip-preview" />
+          ) : (
+            <span className="muted">Tap to choose an image, or drop it here</span>
+          )}
+          <input
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/heic"
+            onChange={(e) => onPick(e.target.files?.[0])}
+            hidden
+          />
+        </label>
+        <button className="go" onClick={run} disabled={loading}>
+          {loading ? "Reading the slip…" : "Analyze slip"}
+        </button>
+        {error && <div className="error">{error}</div>}
+      </div>
+
+      {result && (
+        <ScrollIntoView>
+          <div className="slip-results">
+            <SlipParlaySummary parlay={result.parlay} betType={result.bet_type} />
+            {result.legs.map((leg, i) => (
+              <SlipLegCard leg={leg} key={i} />
+            ))}
+          </div>
+        </ScrollIntoView>
+      )}
+    </>
+  );
+}
+
 export default function App() {
   const [sport, setSport] = useState("nba");
   const [mode, setMode] = useState("props");
@@ -1168,8 +1379,17 @@ export default function App() {
         >
           ⚽ World Cup
         </button>
+        <button
+          className={sport === "slip" ? "tab active" : "tab"}
+          onClick={() => setSport("slip")}
+        >
+          📸 Scan Slip
+        </button>
       </div>
 
+      {sport === "slip" && <SlipAnalyzer />}
+
+      {sport !== "slip" && (
       <div className="tabs">
         <button
           className={mode === "props" ? "tab active" : "tab"}
@@ -1190,8 +1410,9 @@ export default function App() {
           Best Bets
         </button>
       </div>
+      )}
 
-      {mode === "bets" && <GameBoard sport={sport} />}
+      {sport !== "slip" && mode === "bets" && <GameBoard sport={sport} />}
 
       {sport === "soccer" && mode === "game" && <SoccerGameView />}
       {sport === "soccer" && mode === "props" && <SoccerPropsView />}

@@ -35,7 +35,7 @@ import os
 import re
 import importlib.util
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -89,6 +89,11 @@ except Exception as exc:  # noqa: BLE001 - soccer must never break NBA
 
 # Daily "My Picks" boards (computed in the background, cached per day).
 import daily_picks
+
+# Bet-slip analyzer (screenshot -> per-leg hit probabilities). Imports plainly
+# because its filename has no leading digit; it talks to the engines we pass in.
+import slip_analysis
+import llm_analysis
 
 daily_picks.init(
     nba=engine, nba_game=game_engine,
@@ -300,6 +305,44 @@ def soccer_game(
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:  # noqa: BLE001 - tables missing / RLS / network
         raise _soccer_data_error(exc)
+
+
+# --- Bet-slip analyzer -------------------------------------------------------
+# Accept up to ~10 MB; phone screenshots are well under this.
+_MAX_SLIP_BYTES = 10 * 1024 * 1024
+_ALLOWED_IMAGE_TYPES = {"image/png", "image/jpeg", "image/jpg", "image/webp", "image/heic"}
+
+
+@app.get("/api/slip/health")
+def slip_health():
+    """Whether the slip analyzer can run (needs a Gemini key for OCR/fallback)."""
+    return {"llm_available": llm_analysis.available(), "model": llm_analysis.GEMINI_MODEL}
+
+
+@app.post("/api/analyze-slip")
+async def analyze_slip(image: UploadFile = File(..., description="bet-slip screenshot")):
+    """Read a bet-slip/parlay screenshot and grade every leg.
+
+    Soccer/NBA player props we track are graded with our own model; everything
+    else (other sports, team markets, untracked players) falls back to Gemini.
+    Returns {bet_type, book, legs:[...], parlay:{...}}."""
+    mime = (image.content_type or "image/png").lower()
+    if mime not in _ALLOWED_IMAGE_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported image type '{mime}'. Use PNG, JPEG, WEBP or HEIC.",
+        )
+    data = await image.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Empty upload.")
+    if len(data) > _MAX_SLIP_BYTES:
+        raise HTTPException(status_code=400, detail="Image too large (max 10 MB).")
+    try:
+        return slip_analysis.analyze(
+            data, mime, nba_engine=engine, soccer_engine=soccer_engine,
+        )
+    except llm_analysis.LLMUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
 
 
 # --- Static frontend (production) -------------------------------------------

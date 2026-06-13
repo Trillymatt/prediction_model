@@ -42,6 +42,22 @@ export function projectGame({ home, away, date, gameId }) {
   return getJSON(`/api/game?${params.toString()}`);
 }
 
+// ---- Bet-slip analyzer -----------------------------------------------------
+
+// Upload a screenshot of a line/parlay; get each leg graded (our model for
+// NBA/soccer props, Gemini for everything else) plus a parlay summary.
+export function analyzeSlip(file) {
+  const form = new FormData();
+  form.append("image", file);
+  return fetch("/api/analyze-slip", { method: "POST", body: form }).then(
+    async (res) => {
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.detail || `Request failed (${res.status})`);
+      return body;
+    }
+  );
+}
+
 // ---- Soccer (World Cup) ----------------------------------------------------
 
 export function fetchSoccerStats() {
