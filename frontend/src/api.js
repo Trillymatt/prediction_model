@@ -42,6 +42,51 @@ export function projectGame({ home, away, date, gameId }) {
   return getJSON(`/api/game?${params.toString()}`);
 }
 
+// ---- Roster + multi-prop (NBA & soccer) ------------------------------------
+// Each call routes to the NBA or soccer endpoint by `sport`; the response
+// shapes match, so the same UI renders both.
+
+// Every player on both teams of a game/match, most-used players first.
+export function fetchRoster({ home, away, sport = "nba" }) {
+  const params = new URLSearchParams({ home, away });
+  const base = sport === "soccer" ? "/api/soccer/roster" : "/api/roster";
+  return getJSON(`${base}?${params.toString()}`);
+}
+
+// One player's projection across several stats at once (no line graded).
+export function fetchPlayerProjections({
+  player,
+  stats,
+  opponent,
+  location = "auto",
+  gameType = "auto",
+  sport = "nba",
+}) {
+  const params = new URLSearchParams({ player });
+  if (stats && stats.length) params.set("stats", stats.join(","));
+  if (opponent) params.set("opponent", opponent);
+  if (sport === "soccer") {
+    return getJSON(`/api/soccer/player/projections?${params.toString()}`);
+  }
+  params.set("location", location);
+  params.set("game_type", gameType);
+  return getJSON(`/api/player/projections?${params.toString()}`);
+}
+
+// Grade a hand-built list of props and score them as a parlay.
+export function projectBatch(props, sport = "nba") {
+  const url = sport === "soccer" ? "/api/soccer/project-batch" : "/api/project-batch";
+  return fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ props }),
+  }).then(async (res) => {
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.detail || `Request failed (${res.status})`);
+    return body;
+  });
+}
+
 // ---- Bet-slip analyzer -----------------------------------------------------
 
 // Upload a screenshot of a line/parlay; get each leg graded (our model for

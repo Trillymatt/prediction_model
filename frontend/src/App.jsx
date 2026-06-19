@@ -12,6 +12,9 @@ import {
   fetchUpcomingSoccerGames,
   projectSoccerGame,
   analyzeSlip,
+  fetchRoster,
+  fetchPlayerProjections,
+  projectBatch,
 } from "./api.js";
 
 // Friendly labels for the stat dropdown.
@@ -55,12 +58,67 @@ function sortStats(stats) {
   });
 }
 
-function PlayerSearch({ selected, onSelect, searchFn = searchPlayers }) {
+// Remembers the players you've searched (per sport, in localStorage) so you can
+// jump back to them with one tap instead of retyping. Shared across every
+// PlayerSearch on the page — selecting a player anywhere updates the list
+// everywhere via a custom event.
+const RECENTS_MAX = 12;
+
+function useRecents(sport) {
+  const key = `mfab_recent_players_${sport}`;
+  const read = () => {
+    try {
+      return JSON.parse(localStorage.getItem(key)) || [];
+    } catch {
+      return [];
+    }
+  };
+  const [recents, setRecents] = useState(read);
+
+  useEffect(() => {
+    const reload = () => setRecents(read());
+    window.addEventListener("storage", reload);
+    window.addEventListener("mfab-recents", reload);
+    return () => {
+      window.removeEventListener("storage", reload);
+      window.removeEventListener("mfab-recents", reload);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+
+  const remember = (player) => {
+    if (!player || !player.player_name) return;
+    const next = [
+      { player_id: player.player_id, player_name: player.player_name,
+        team: player.team, position: player.position },
+      ...read().filter((p) => p.player_name !== player.player_name),
+    ].slice(0, RECENTS_MAX);
+    try {
+      localStorage.setItem(key, JSON.stringify(next));
+    } catch {
+      /* storage full / disabled — recents just won't persist */
+    }
+    setRecents(next);
+    window.dispatchEvent(new Event("mfab-recents"));
+  };
+
+  return { recents, remember };
+}
+
+function PlayerSearch({ selected, onSelect, searchFn = searchPlayers, sport = "nba" }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
   const [open, setOpen] = useState(false);
   const boxRef = useRef(null);
   const inputRef = useRef(null);
+  const { recents, remember } = useRecents(sport);
+
+  const choose = (p) => {
+    remember(p);
+    onSelect(p);
+    setQuery(p.player_name);
+    setOpen(false);
+  };
 
   const clear = () => {
     setQuery("");
@@ -122,14 +180,7 @@ function PlayerSearch({ selected, onSelect, searchFn = searchPlayers }) {
       {open && results.length > 0 && (
         <ul className="dropdown">
           {results.map((p) => (
-            <li
-              key={p.player_id}
-              onClick={() => {
-                onSelect(p);
-                setQuery(p.player_name);
-                setOpen(false);
-              }}
-            >
+            <li key={p.player_id} onClick={() => choose(p)}>
               <span>{p.player_name}</span>
               <span className="muted">
                 {p.team}
@@ -139,7 +190,464 @@ function PlayerSearch({ selected, onSelect, searchFn = searchPlayers }) {
           ))}
         </ul>
       )}
+      {!selected && !query && recents.length > 0 && (
+        <div className="recents">
+          <span className="recents-label">Recent</span>
+          <div className="recents-chips">
+            {recents.map((p) => (
+              <button
+                type="button"
+                key={p.player_id}
+                className="recent-chip"
+                onClick={() => choose(p)}
+              >
+                {p.player_name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+// ===========================================================================
+// Instant over/under math (shared by the projections table and multi-prop)
+// ===========================================================================
+// Standard-normal CDF (Abramowitz & Stegun 26.2.17). The engine grades a line
+// with the same normal model, so the live % we show as the user types a line
+// matches the number the server returns when the prop is submitted.
+function normalCdf(z) {
+  const t = 1 / (1 + 0.2316419 * Math.abs(z));
+  const d = 0.3989423 * Math.exp((-z * z) / 2);
+  let p =
+    d * t *
+    (0.3193815 +
+      t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
+  if (z > 0) p = 1 - p;
+  return p;
+}
+
+function overProb(projection, sigma, line) {
+  if (!sigma || line === "" || line == null || isNaN(Number(line))) return null;
+  return 1 - normalCdf((Number(line) - projection) / sigma);
+}
+
+const PROJ_STATS = ["points", "rebounds", "assists", "threes", "pra"];
+const SOCCER_PROJ_STATS = [
+  "goals", "assists", "goals_assists", "shots", "shots_on_target",
+];
+
+// "What the model thinks he'll hit": one player's projection across several
+// stats, each with a pre-filled line you can tweak for an instant over/under
+// read and a one-tap "Add" to the multi-prop slip. Works for both sports —
+// `sport` picks the stat set, labels, and which endpoint to hit.
+function PlayerProjections({
+  player,
+  opponent,
+  location = "auto",
+  gameType = "auto",
+  onAddProp,
+  sport = "nba",
+}) {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [lines, setLines] = useState({});
+  const [added, setAdded] = useState({});
+  const labels = sport === "soccer" ? SOCCER_STAT_LABELS : STAT_LABELS;
+
+  useEffect(() => {
+    if (!player) return;
+    let cancelled = false;
+    setLoading(true);
+    setError("");
+    setData(null);
+    setAdded({});
+    fetchPlayerProjections({
+      player: player.player_name,
+      stats: sport === "soccer" ? SOCCER_PROJ_STATS : PROJ_STATS,
+      opponent,
+      location,
+      gameType,
+      sport,
+    })
+      .then((d) => {
+        if (cancelled) return;
+        setData(d);
+        const init = {};
+        d.projections.forEach((p) => {
+          init[p.stat] = String(p.suggested_line);
+        });
+        setLines(init);
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e.message);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // Key on the stable name/id so re-renders that hand us a fresh player
+    // object (e.g. the roster rebuilding) don't trigger a needless refetch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [player?.player_name, player?.player_id, opponent, location, gameType, sport]);
+
+  if (!player) return null;
+  if (loading)
+    return <div className="muted proj-loading">Projecting {player.player_name}…</div>;
+  if (error) return <div className="error">{error}</div>;
+  if (!data) return null;
+
+  return (
+    <div className="proj-table">
+      <div className="proj-table-head">
+        <span className="pick-name">{data.player_name}</span>
+        <span className="muted">
+          {data.team}
+          {data.opponent
+            ? ` ${data.home_away === "AWAY" ? "@" : "vs"} ${data.opponent}`
+            : ""}
+        </span>
+      </div>
+      {data.projections.map((p) => {
+        const line = lines[p.stat];
+        const po = overProb(p.projection, p.sigma, line);
+        const overPct = po == null ? null : Math.round(po * 100);
+        const side = po == null ? null : po >= 0.5 ? "OVER" : "UNDER";
+        const conf = overPct == null ? null : Math.max(overPct, 100 - overPct);
+        return (
+          <div className="proj-row" key={p.stat}>
+            <div className="proj-row-main">
+              <span className="proj-row-stat">{labels[p.stat] || p.stat}</span>
+              <span className="proj-row-val">
+                {p.projection}
+                <span className="muted"> ± {p.sigma}</span>
+              </span>
+            </div>
+            <div className="proj-row-controls">
+              <input
+                type="number"
+                step="0.5"
+                className="line-input"
+                value={line ?? ""}
+                onChange={(e) => setLines({ ...lines, [p.stat]: e.target.value })}
+              />
+              {side && (
+                <span className={`proj-read ${side === "OVER" ? "over" : "under"}`}>
+                  {side} {conf}%
+                </span>
+              )}
+              {onAddProp && (
+                <button
+                  type="button"
+                  className={`add-prop ${added[p.stat] ? "done" : ""}`}
+                  onClick={() => {
+                    onAddProp({
+                      player: data.player_name,
+                      player_id: player.player_id,
+                      stat: p.stat,
+                      line:
+                        line === "" || line == null ? p.suggested_line : Number(line),
+                      side,
+                      opponent: opponent || undefined,
+                      location,
+                      gameType,
+                      team: data.team,
+                      sport,
+                    });
+                    setAdded({ ...added, [p.stat]: true });
+                  }}
+                >
+                  {added[p.stat] ? "✓ Added" : "+ Add"}
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ===========================================================================
+// Game roster: every player on both teams, in one place
+// ===========================================================================
+function RosterPlayerRow({ p, opponent, addProp, sport = "nba" }) {
+  const [open, setOpen] = useState(false);
+  const player = { player_name: p.player_name, player_id: p.player_id };
+
+  // Each sport shows the stat it has on hand: NBA minutes/ppg, soccer recent
+  // minutes and goal involvement per 90.
+  const sub =
+    sport === "soccer"
+      ? p.recent_minutes
+        ? `${Math.round(p.recent_minutes)} min (recent)`
+        : ""
+      : p.l10_minutes
+      ? `${Math.round(p.l10_minutes)} min (L10)`
+      : "";
+  const stat =
+    sport === "soccer"
+      ? { val: p.ga_per90 != null ? `${p.ga_per90}` : "–", note: "G+A/90 · tap" }
+      : { val: p.ppg != null ? `${p.ppg}` : "–", note: p.ppg != null ? "ppg · tap" : "tap for props" };
+
+  return (
+    <div>
+      <button
+        className={`pick-row ${open ? "active" : ""}`}
+        onClick={() => setOpen(!open)}
+      >
+        <span className="pick-left">
+          <span className="pick-name">{p.player_name}</span>
+          <span className="muted">
+            {p.position || ""}
+            {p.position && sub ? " · " : ""}
+            {sub}
+          </span>
+        </span>
+        <span className="pick-claim over">
+          {stat.val}
+          <span className="pick-prob">{stat.note}</span>
+        </span>
+      </button>
+      {open && (
+        <div className="pick-detail">
+          <PlayerProjections
+            player={player}
+            opponent={opponent}
+            location={p.location}
+            onAddProp={addProp}
+            sport={sport}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RosterView({ roster, addProp, sport = "nba" }) {
+  if (!roster) return null;
+  const sep = sport === "soccer" ? "vs" : "@";
+  return (
+    <div className="card picks">
+      <div className="picks-head">
+        <label>
+          👥 Players · {roster.away_team} {sep} {roster.home_team}
+        </label>
+        <span className="muted">tap any player for the model's read</span>
+      </div>
+      {roster.teams.map((t) => (
+        <div className="roster-team" key={t.abbr}>
+          <h3 className="roster-team-name">
+            {t.abbr}
+            <span className="muted"> · {t.side}</span>
+          </h3>
+          <div className="picks-list">
+            {t.players.length === 0 && (
+              <div className="muted">No players found for this team.</div>
+            )}
+            {t.players.map((p) => (
+              <RosterPlayerRow
+                key={p.player_id}
+                p={p}
+                opponent={t.opponent}
+                addProp={addProp}
+                sport={sport}
+              />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ===========================================================================
+// Multi-Prop: build a slip by hand, grade every leg + the parlay in one shot
+// ===========================================================================
+function MultiLegCard({ leg, sport = "nba" }) {
+  const labels = sport === "soccer" ? SOCCER_STAT_LABELS : STAT_LABELS;
+  const matchup = leg.opponent
+    ? ` ${leg.home_away === "AWAY" ? "@" : "vs"} ${leg.opponent}`
+    : "";
+  const inj =
+    leg.injury &&
+    !["", "active", "available"].includes((leg.injury.status || "").toLowerCase())
+      ? leg.injury
+      : null;
+  return (
+    <div className="card slip-leg">
+      <div className="result-head">
+        <div>
+          <h3 className="leg-title">{leg.player_name}</h3>
+          <div className="muted">
+            {leg.side || ""} {leg.line} {labels[leg.stat] || leg.stat}
+            {matchup}
+          </div>
+        </div>
+        {leg.confidence_label && (
+          <span className="badge model">{leg.confidence_label}</span>
+        )}
+      </div>
+      {leg.error ? (
+        <div className="note">{leg.error}</div>
+      ) : (
+        <>
+          <HitBar p={leg.hit_probability} />
+          <div className="leg-stat-row">
+            <div>
+              <span className="muted">Hit chance</span>
+              <b>{pct(leg.hit_probability)}</b>
+            </div>
+            {leg.projection != null && (
+              <div>
+                <span className="muted">Projection</span>
+                <b>{leg.projection}</b>
+              </div>
+            )}
+            {leg.recommendation && (
+              <div>
+                <span className="muted">Model leans</span>
+                <b>{leg.recommendation}</b>
+              </div>
+            )}
+          </div>
+          {inj && (
+            <div className="injury">
+              ⚠ {inj.status}
+              {inj.reason ? ` — ${inj.reason}` : ""}
+            </div>
+          )}
+          {leg.note && <div className="note">{leg.note}</div>}
+          <FactorList title="Why" factors={leg.factors} />
+        </>
+      )}
+    </div>
+  );
+}
+
+function MultiPropView({ slip, addProp, removeProp, clearSlip, sport = "nba" }) {
+  const [player, setPlayer] = useState(null);
+  const [results, setResults] = useState(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const labels = sport === "soccer" ? SOCCER_STAT_LABELS : STAT_LABELS;
+  const searchFn = sport === "soccer" ? searchSoccerPlayers : searchPlayers;
+
+  // Only this sport's props live in this view; the other sport's slip is kept
+  // intact behind its own tab.
+  const mine = slip.filter((p) => p.sport === sport);
+
+  // A new player search shouldn't carry results from the last one.
+  useEffect(() => setResults(null), [sport]);
+
+  const submit = async () => {
+    if (!mine.length) {
+      setError("Add at least one prop first.");
+      return;
+    }
+    setError("");
+    setLoading(true);
+    setResults(null);
+    try {
+      const props = mine.map((p) => ({
+        player: p.player,
+        stat: p.stat,
+        line: p.line,
+        side: p.side || undefined,
+        opponent: p.opponent,
+        location: p.location,
+        game_type: p.gameType,
+      }));
+      setResults(await projectBatch(props, sport));
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="card controls">
+        <p className="muted">
+          Search a player to see what the model projects, then add the props you
+          want. Stack as many players as you like and grade them all at once.
+        </p>
+        <PlayerSearch
+          selected={player}
+          onSelect={setPlayer}
+          searchFn={searchFn}
+          sport={sport}
+        />
+        {player && (
+          <PlayerProjections player={player} onAddProp={addProp} sport={sport} />
+        )}
+      </div>
+
+      <div className="card">
+        <div className="picks-head">
+          <label>🧾 Your Props ({mine.length})</label>
+          {mine.length > 0 && (
+            <button
+              type="button"
+              className="link-btn"
+              onClick={() => clearSlip(sport)}
+            >
+              Clear all
+            </button>
+          )}
+        </div>
+        {mine.length === 0 && (
+          <div className="muted">
+            No props yet — add some from the projections above, or from the{" "}
+            {sport === "soccer" ? "Match" : "Game"} Outcome roster.
+          </div>
+        )}
+        {mine.length > 0 && (
+          <div className="slip-build-list">
+            {mine.map((p, i) => (
+              <div className="slip-build-row" key={`${p.player}-${p.stat}-${i}`}>
+                <span className="pick-left">
+                  <span className="pick-name">{p.player}</span>
+                  <span className="muted">
+                    {p.side || "OVER"} {p.line} {labels[p.stat] || p.stat}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  className="remove-prop"
+                  aria-label="Remove prop"
+                  onClick={() => removeProp(p)}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        {mine.length > 0 && (
+          <button className="go" onClick={submit} disabled={loading}>
+            {loading ? "Grading…" : `Get confidence on all ${mine.length}`}
+          </button>
+        )}
+        {error && <div className="error">{error}</div>}
+      </div>
+
+      {results && (
+        <ScrollIntoView>
+          <div className="slip-results">
+            <SlipParlaySummary parlay={results.combined} betType="parlay" />
+            {results.legs.map((leg, i) => (
+              <MultiLegCard leg={leg} key={i} sport={sport} />
+            ))}
+          </div>
+        </ScrollIntoView>
+      )}
+    </>
   );
 }
 
@@ -636,10 +1144,11 @@ function GameBoard({ sport }) {
   );
 }
 
-function GameView() {
+function GameView({ addProp }) {
   const [games, setGames] = useState([]);
   const [selected, setSelected] = useState(null);
   const [result, setResult] = useState(null);
+  const [roster, setRoster] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -654,6 +1163,12 @@ function GameView() {
     setError("");
     setLoading(true);
     setResult(null);
+    setRoster(null);
+    // Roster loads alongside the outcome so picking a game gives you the whole
+    // game — the call + every player on both teams — in one place.
+    fetchRoster({ home: g.home_team, away: g.away_team })
+      .then(setRoster)
+      .catch(() => setRoster(null));
     try {
       const r = await projectGame({
         home: g.home_team,
@@ -702,6 +1217,8 @@ function GameView() {
           <GameResultCard r={result} />
         </ScrollIntoView>
       )}
+
+      <RosterView roster={roster} addProp={addProp} />
     </>
   );
 }
@@ -928,10 +1445,11 @@ function SoccerGameCard({ r, collapseWhy }) {
   );
 }
 
-function SoccerGameView() {
+function SoccerGameView({ addProp }) {
   const [games, setGames] = useState([]);
   const [selected, setSelected] = useState(null);
   const [result, setResult] = useState(null);
+  const [roster, setRoster] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -946,6 +1464,12 @@ function SoccerGameView() {
     setError("");
     setLoading(true);
     setResult(null);
+    setRoster(null);
+    // Both squads load alongside the outcome — pick a match, get the call and
+    // every player in one place.
+    fetchRoster({ home: g.home_team, away: g.away_team, sport: "soccer" })
+      .then(setRoster)
+      .catch(() => setRoster(null));
     try {
       const r = await projectSoccerGame({
         home: g.home_team,
@@ -1000,11 +1524,13 @@ function SoccerGameView() {
           <SoccerGameCard r={result} />
         </ScrollIntoView>
       )}
+
+      <RosterView roster={roster} addProp={addProp} sport="soccer" />
     </>
   );
 }
 
-function SoccerPropsView() {
+function SoccerPropsView({ addProp }) {
   const [stats, setStats] = useState([]);
   const [player, setPlayer] = useState(null);
   const [stat, setStat] = useState("goals");
@@ -1050,7 +1576,17 @@ function SoccerPropsView() {
           selected={player}
           onSelect={setPlayer}
           searchFn={searchSoccerPlayers}
+          sport="soccer"
         />
+
+        {player && (
+          <PlayerProjections
+            player={player}
+            opponent={opponent.trim() || undefined}
+            onAddProp={addProp}
+            sport="soccer"
+          />
+        )}
 
         <div className="row">
           <div className="field">
@@ -1327,6 +1863,25 @@ export default function App() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  // The multi-prop slip lives here so props can be added from anywhere (the
+  // Player Props projections, the Game Outcome roster) and reviewed in one tab.
+  const [slip, setSlip] = useState([]);
+
+  const addProp = (prop) => {
+    setSlip((s) =>
+      s.some(
+        (p) =>
+          p.sport === prop.sport &&
+          p.player === prop.player &&
+          p.stat === prop.stat
+      )
+        ? s
+        : [...s, prop]
+    );
+  };
+  const removeProp = (prop) => setSlip((s) => s.filter((p) => p !== prop));
+  const clearSlip = (sportKey) =>
+    setSlip((s) => s.filter((p) => p.sport !== sportKey));
 
   useEffect(() => {
     fetchStats().then((s) => setStats(sortStats(s))).catch(() => {});
@@ -1403,6 +1958,17 @@ export default function App() {
         >
           {sport === "soccer" ? "Match Outcome" : "Game Outcome"}
         </button>
+        {sport !== "slip" && (
+          <button
+            className={mode === "multi" ? "tab active" : "tab"}
+            onClick={() => setMode("multi")}
+          >
+            Multi-Prop
+            {slip.filter((p) => p.sport === sport).length > 0
+              ? ` (${slip.filter((p) => p.sport === sport).length})`
+              : ""}
+          </button>
+        )}
         <button
           className={mode === "bets" ? "tab active" : "tab"}
           onClick={() => setMode("bets")}
@@ -1414,14 +1980,46 @@ export default function App() {
 
       {sport !== "slip" && mode === "bets" && <GameBoard sport={sport} />}
 
-      {sport === "soccer" && mode === "game" && <SoccerGameView />}
-      {sport === "soccer" && mode === "props" && <SoccerPropsView />}
+      {sport === "soccer" && mode === "game" && (
+        <SoccerGameView addProp={addProp} />
+      )}
+      {sport === "soccer" && mode === "props" && (
+        <SoccerPropsView addProp={addProp} />
+      )}
+      {sport === "soccer" && mode === "multi" && (
+        <MultiPropView
+          slip={slip}
+          addProp={addProp}
+          removeProp={removeProp}
+          clearSlip={clearSlip}
+          sport="soccer"
+        />
+      )}
 
-      {sport === "nba" && mode === "game" && <GameView />}
+      {sport === "nba" && mode === "game" && <GameView addProp={addProp} />}
+      {sport === "nba" && mode === "multi" && (
+        <MultiPropView
+          slip={slip}
+          addProp={addProp}
+          removeProp={removeProp}
+          clearSlip={clearSlip}
+          sport="nba"
+        />
+      )}
 
       {sport === "nba" && mode === "props" && (
       <div className="card controls">
         <PlayerSearch selected={player} onSelect={setPlayer} />
+
+        {player && (
+          <PlayerProjections
+            player={player}
+            opponent={opponent.trim().toUpperCase() || undefined}
+            location={location}
+            gameType={gameType}
+            onAddProp={addProp}
+          />
+        )}
 
         <div className="row">
           <div className="field">
