@@ -26,6 +26,15 @@ AVERAGES_TABLE = "nba_player_averages"
 # people actually shop for without running every stat the engine supports.
 DEFAULT_STATS = ["points", "rebounds", "assists", "threes", "pra"]
 
+# Soccer equivalents: the markets people actually shop, in confidence order.
+SOCCER_DEFAULT_STATS = ["goals", "assists", "goals_assists", "shots",
+                        "shots_on_target"]
+
+# Recent-minutes floor for who shows on a soccer roster. Lower than the picks
+# board's 30 so squad players (not just nailed-on starters) appear, while still
+# burying players who've dropped out of the matchday squad.
+SOCCER_ROSTER_MIN_RECENT_MINUTES = 20.0
+
 
 def _chunks(seq, n):
     for i in range(0, len(seq), n):
@@ -45,11 +54,24 @@ def _home_away(location: str):
 
 def _suggest_line(projection: float) -> float:
     """A clean over/under line near the projection (always an X.5), so the UI can
-    pre-fill a sensible line the user can tweak instead of leaving it blank."""
+    pre-fill a sensible line the user can tweak instead of leaving it blank.
+    Floored at 0.5 so low-count soccer stats never suggest a 0 or negative line."""
     line = round(projection * 2) / 2          # nearest half-point
     if line == int(line):                     # whole number -> drop to the .5 below
         line -= 0.5
-    return round(line, 1)
+    return max(0.5, round(line, 1))
+
+
+def _project(engine, sport, player, stat, line, opponent, location, game_type):
+    """Dispatch to the right engine. Both return the same output shape
+    (projection, sigma, p_over/p_under, recommendation, factors, ...) so
+    everything downstream is sport-agnostic."""
+    if sport == "soccer":
+        return engine.project_soccer_player(
+            player_name=player, stat=stat, line=line, opponent=opponent or None)
+    return engine.project_player(
+        player_name=player, stat=stat, line=line, opponent=opponent or None,
+        home_away=_home_away(location), season_type=_season_type(game_type))
 
 
 # ---------------------------------------------------------------------------
@@ -136,29 +158,95 @@ def nba_roster(engine, home: str, away: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Roster: every player on both teams of a soccer match
+# ---------------------------------------------------------------------------
+def _soccer_team_players(sc, team: str) -> list:
+    """Squad players for one team from its match logs: recent regular minutes,
+    most-used first. Built from logs (not the optional soccer_players table) so
+    it works wherever the picks board does."""
+    columns = "player_id,player_name,team,match_date,minutes_played,goals,assists"
+    rows = sc.fetch_all(sc.LOGS_TABLE, columns,
+                        filters=[("eq", "team", team)], order_col="match_date")
+    if not rows and sc.normalize_team(team) != team:
+        rows = sc.fetch_all(sc.LOGS_TABLE, columns,
+                            filters=[("eq", "team", sc.normalize_team(team))],
+                            order_col="match_date")
+    if not rows:
+        return []
+
+    recent_team_dates = sorted({r["match_date"] for r in rows})[-3:]
+    by_player = {}
+    for r in rows:
+        by_player.setdefault(r["player_id"], []).append(r)
+
+    out = []
+    for pid, plist in by_player.items():
+        played = [r for r in plist if r.get("minutes_played")]
+        if not played:
+            continue
+        # Drop players who've fallen out of the matchday squad.
+        if played[-1]["match_date"] not in recent_team_dates:
+            continue
+        recent = played[-3:]
+        recent_minutes = sum(r["minutes_played"] for r in recent) / len(recent)
+        if recent_minutes < SOCCER_ROSTER_MIN_RECENT_MINUTES:
+            continue
+        total_minutes = sum(r["minutes_played"] for r in played)
+        goals = sum(r.get("goals") or 0 for r in played)
+        assists = sum(r.get("assists") or 0 for r in played)
+        out.append({
+            "player_id": pid,
+            "player_name": played[-1]["player_name"],
+            "team": played[-1].get("team") or team,
+            "position": None,
+            "recent_minutes": round(recent_minutes, 1),
+            "ga_per90": round((goals + assists) / total_minutes * 90, 2)
+                        if total_minutes else 0.0,
+        })
+
+    out.sort(key=lambda p: p["recent_minutes"], reverse=True)
+    return out
+
+
+def soccer_roster(soccer, home: str, away: str) -> dict:
+    """Both squads for a match, most-used players first -- the soccer twin of
+    nba_roster(). Player opponent is carried at the team level (soccer
+    projections take only an opponent, no home/away split)."""
+    sc = soccer.sc
+    home_n = sc.normalize_team(home)
+    away_n = sc.normalize_team(away)
+    teams = []
+    for team, side, opp in ((home_n, "home", away_n), (away_n, "away", home_n)):
+        teams.append({
+            "abbr": team,
+            "side": side,
+            "opponent": opp,
+            "players": _soccer_team_players(sc, team),
+        })
+    return {"home_team": home_n, "away_team": away_n, "teams": teams}
+
+
+# ---------------------------------------------------------------------------
 # Multi-stat projection for one player ("what he's projected for")
 # ---------------------------------------------------------------------------
 def player_projections(engine, player: str, stats=None, opponent: str = None,
-                       location: str = None, game_type: str = "auto") -> dict:
+                       location: str = None, game_type: str = "auto",
+                       sport: str = "nba") -> dict:
     """Project several stats for one player in a single response.
 
     No line is graded here -- we return the projection and its spread (sigma)
     for each stat so the frontend can show the numbers and compute an instant
     over/under read for any line the user types (same normal-CDF math the
     engine uses), and pre-fill a suggested line per stat."""
-    stats = [s for s in (stats or DEFAULT_STATS) if s in engine.STAT_DEFS]
-    home_away = _home_away(location)
-    season_type = _season_type(game_type)
+    defaults = SOCCER_DEFAULT_STATS if sport == "soccer" else DEFAULT_STATS
+    stats = [s for s in (stats or defaults) if s in engine.STAT_DEFS]
 
     meta = {}
     projections = []
     for stat in stats:
         try:
-            r = engine.project_player(
-                player_name=player, stat=stat, line=None,
-                opponent=opponent or None, home_away=home_away,
-                season_type=season_type,
-            )
+            r = _project(engine, sport, player, stat, None,
+                         opponent, location, game_type)
         except Exception:  # noqa: BLE001 - skip a stat we can't project, keep the rest
             continue
         if not meta:
@@ -170,7 +258,7 @@ def player_projections(engine, player: str, stats=None, opponent: str = None,
             "sigma": r["sigma"],
             "l5": r.get("l5"),
             "l10": r.get("l10"),
-            "season_avg": r.get("season_avg"),
+            "season_avg": r.get("season_avg") or r.get("avg"),
             "suggested_line": _suggest_line(r["projection"]),
         })
 
@@ -182,7 +270,7 @@ def player_projections(engine, player: str, stats=None, opponent: str = None,
 # ---------------------------------------------------------------------------
 # Batch grading: a hand-built slip of props -> per-leg grade + parlay read
 # ---------------------------------------------------------------------------
-def _grade_one(engine, prop: dict) -> dict:
+def _grade_one(engine, prop: dict, sport: str) -> dict:
     """Grade a single typed prop, mirroring the fields a scanned slip leg
     carries so the frontend can reuse the same card."""
     player = (prop.get("player") or "").strip()
@@ -198,12 +286,9 @@ def _grade_one(engine, prop: dict) -> dict:
         leg["error"] = f"Unknown stat '{stat}'."
         return leg
     try:
-        r = engine.project_player(
-            player_name=player, stat=stat, line=line,
-            opponent=(prop.get("opponent") or None),
-            home_away=_home_away(prop.get("location")),
-            season_type=_season_type(prop.get("game_type", "auto")),
-        )
+        r = _project(engine, sport, player, stat, line,
+                     prop.get("opponent"), prop.get("location"),
+                     prop.get("game_type", "auto"))
     except (LookupError, ValueError) as exc:
         leg["error"] = str(exc)
         return leg
@@ -292,7 +377,7 @@ def _combine(legs: list) -> dict:
     return summary
 
 
-def grade_batch(engine, props: list) -> dict:
+def grade_batch(engine, props: list, sport: str = "nba") -> dict:
     """Grade every prop in the list and score them together as a parlay."""
-    legs = [_grade_one(engine, p) for p in props]
+    legs = [_grade_one(engine, p, sport) for p in props]
     return {"legs": legs, "combined": _combine(legs)}

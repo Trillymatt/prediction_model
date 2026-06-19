@@ -42,12 +42,15 @@ export function projectGame({ home, away, date, gameId }) {
   return getJSON(`/api/game?${params.toString()}`);
 }
 
-// ---- Roster + multi-prop (NBA) ---------------------------------------------
+// ---- Roster + multi-prop (NBA & soccer) ------------------------------------
+// Each call routes to the NBA or soccer endpoint by `sport`; the response
+// shapes match, so the same UI renders both.
 
-// Every player on both teams of a game, rotation players first.
-export function fetchRoster({ home, away }) {
+// Every player on both teams of a game/match, most-used players first.
+export function fetchRoster({ home, away, sport = "nba" }) {
   const params = new URLSearchParams({ home, away });
-  return getJSON(`/api/roster?${params.toString()}`);
+  const base = sport === "soccer" ? "/api/soccer/roster" : "/api/roster";
+  return getJSON(`${base}?${params.toString()}`);
 }
 
 // One player's projection across several stats at once (no line graded).
@@ -57,16 +60,23 @@ export function fetchPlayerProjections({
   opponent,
   location = "auto",
   gameType = "auto",
+  sport = "nba",
 }) {
-  const params = new URLSearchParams({ player, location, game_type: gameType });
+  const params = new URLSearchParams({ player });
   if (stats && stats.length) params.set("stats", stats.join(","));
   if (opponent) params.set("opponent", opponent);
+  if (sport === "soccer") {
+    return getJSON(`/api/soccer/player/projections?${params.toString()}`);
+  }
+  params.set("location", location);
+  params.set("game_type", gameType);
   return getJSON(`/api/player/projections?${params.toString()}`);
 }
 
 // Grade a hand-built list of props and score them as a parlay.
-export function projectBatch(props) {
-  return fetch("/api/project-batch", {
+export function projectBatch(props, sport = "nba") {
+  const url = sport === "soccer" ? "/api/soccer/project-batch" : "/api/project-batch";
+  return fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ props }),

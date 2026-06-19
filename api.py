@@ -326,6 +326,58 @@ def soccer_project(
         raise _soccer_data_error(exc)
 
 
+@app.get("/api/soccer/roster")
+def soccer_roster(
+    home: str = Query(..., description="home team, e.g. Mexico"),
+    away: str = Query(..., description="away team, e.g. South Africa"),
+):
+    """Both squads for a match, most-used players first -- the soccer twin of
+    /api/roster so a match shows every player in one place."""
+    _require_soccer()
+    try:
+        return multi_props.soccer_roster(soccer_engine, home, away)
+    except (LookupError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:  # noqa: BLE001 - tables missing / RLS / network
+        raise _soccer_data_error(exc)
+
+
+@app.get("/api/soccer/player/projections")
+def soccer_player_projections(
+    player: str = Query(..., description="exact player name from autocomplete"),
+    stats: str | None = Query(None, description="comma-separated stats; omit for defaults"),
+    opponent: str | None = Query(None, description="opponent country; omit to auto-detect"),
+):
+    """One player's projection across several soccer stats at once."""
+    _require_soccer()
+    stat_list = [s.strip() for s in stats.split(",")] if stats else None
+    try:
+        return multi_props.player_projections(
+            soccer_engine, player, stats=stat_list, opponent=opponent or None,
+            sport="soccer",
+        )
+    except (LookupError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:  # noqa: BLE001 - tables missing / RLS / network
+        raise _soccer_data_error(exc)
+
+
+@app.post("/api/soccer/project-batch")
+def soccer_project_batch(payload: dict = Body(..., description='{"props": [{player, stat, line, side?, opponent?}]}')):
+    """Grade a hand-built list of soccer props as a parlay (soccer twin of
+    /api/project-batch)."""
+    _require_soccer()
+    props = payload.get("props") or []
+    if not isinstance(props, list) or not props:
+        raise HTTPException(status_code=400, detail="Send a non-empty 'props' list.")
+    if len(props) > 25:
+        raise HTTPException(status_code=400, detail="Too many props (max 25).")
+    try:
+        return multi_props.grade_batch(soccer_engine, props, sport="soccer")
+    except Exception as exc:  # noqa: BLE001 - tables missing / RLS / network
+        raise _soccer_data_error(exc)
+
+
 @app.get("/api/soccer/games")
 def soccer_games(days: int = Query(10, ge=1, le=60)):
     """Upcoming matches in the next `days` days (World Cup games first)."""
