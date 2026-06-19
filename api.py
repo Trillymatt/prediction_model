@@ -36,7 +36,7 @@ import re
 import functools
 import importlib.util
 
-from fastapi import FastAPI, File, HTTPException, Query, UploadFile
+from fastapi import Body, FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -96,6 +96,7 @@ import daily_picks
 # because its filename has no leading digit; it talks to the engines we pass in.
 import slip_analysis
 import llm_analysis
+import multi_props
 
 daily_picks.init(
     nba=engine, nba_game=game_engine,
@@ -237,6 +238,53 @@ def game(
         )
     except (LookupError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+# --- Roster + multi-prop (NBA) ----------------------------------------------
+@app.get("/api/roster")
+def roster(
+    home: str = Query(..., description="home team abbrev, e.g. NYK"),
+    away: str = Query(..., description="away team abbrev, e.g. BOS"),
+):
+    """Every player on both teams of a game, rotation players first. Powers the
+    'whole game in one place' view -- pick a game, see both rosters, tap any
+    player for the model's read instead of searching them one at a time."""
+    try:
+        return multi_props.nba_roster(engine, home, away)
+    except (LookupError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.get("/api/player/projections")
+def player_projections(
+    player: str = Query(..., description="exact player name from autocomplete"),
+    stats: str | None = Query(None, description="comma-separated stats; omit for defaults"),
+    opponent: str | None = Query(None, description="opponent abbrev; omit to auto-detect"),
+    location: str = Query("auto", description="auto | home | away"),
+    game_type: str = Query("auto", description="auto | regular | playoffs"),
+):
+    """One player's projection across several stats at once ("what he's
+    projected for"), so you see every number before picking which line to bet."""
+    stat_list = [s.strip() for s in stats.split(",")] if stats else None
+    try:
+        return multi_props.player_projections(
+            engine, player, stats=stat_list, opponent=opponent or None,
+            location=None if location == "auto" else location, game_type=game_type,
+        )
+    except (LookupError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post("/api/project-batch")
+def project_batch(payload: dict = Body(..., description='{"props": [{player, stat, line, side?, opponent?, location?, game_type?}]}')):
+    """Grade a hand-built list of props in one call and score them as a parlay.
+    The typed counterpart to the slip scanner -- same per-leg + combined math."""
+    props = payload.get("props") or []
+    if not isinstance(props, list) or not props:
+        raise HTTPException(status_code=400, detail="Send a non-empty 'props' list.")
+    if len(props) > 25:
+        raise HTTPException(status_code=400, detail="Too many props (max 25).")
+    return multi_props.grade_batch(engine, props)
 
 
 # --- Soccer (World Cup) ------------------------------------------------------

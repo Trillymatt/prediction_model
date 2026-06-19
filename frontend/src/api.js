@@ -42,6 +42,41 @@ export function projectGame({ home, away, date, gameId }) {
   return getJSON(`/api/game?${params.toString()}`);
 }
 
+// ---- Roster + multi-prop (NBA) ---------------------------------------------
+
+// Every player on both teams of a game, rotation players first.
+export function fetchRoster({ home, away }) {
+  const params = new URLSearchParams({ home, away });
+  return getJSON(`/api/roster?${params.toString()}`);
+}
+
+// One player's projection across several stats at once (no line graded).
+export function fetchPlayerProjections({
+  player,
+  stats,
+  opponent,
+  location = "auto",
+  gameType = "auto",
+}) {
+  const params = new URLSearchParams({ player, location, game_type: gameType });
+  if (stats && stats.length) params.set("stats", stats.join(","));
+  if (opponent) params.set("opponent", opponent);
+  return getJSON(`/api/player/projections?${params.toString()}`);
+}
+
+// Grade a hand-built list of props and score them as a parlay.
+export function projectBatch(props) {
+  return fetch("/api/project-batch", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ props }),
+  }).then(async (res) => {
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.detail || `Request failed (${res.status})`);
+    return body;
+  });
+}
+
 // ---- Bet-slip analyzer -----------------------------------------------------
 
 // Upload a screenshot of a line/parlay; get each leg graded (our model for
