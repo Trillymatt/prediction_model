@@ -149,6 +149,70 @@ def parse_date(raw):
         return None
 
 
+# ---------------------------------------------------------------------------
+# Match timing (Eastern). Schedule rows store match_date / match_time in
+# US/Eastern (see 20_soccer_schedule.py), so "has this kicked off yet?" has to
+# be answered in Eastern too -- not in the server's clock (UTC on Railway),
+# which would flip the day over hours early and hide that evening's matches.
+# ---------------------------------------------------------------------------
+try:
+    from zoneinfo import ZoneInfo
+    EASTERN = ZoneInfo("America/New_York")
+except Exception:  # noqa: BLE001 - no tz database -> fall back to UTC
+    EASTERN = None
+
+
+def now_eastern():
+    """Current wall-clock time in US/Eastern (naive, for comparing to the
+    naive match_date/match_time the schedule stores)."""
+    if EASTERN is not None:
+        return datetime.now(EASTERN).replace(tzinfo=None)
+    return datetime.utcnow()
+
+
+def today_eastern():
+    """Today's date in US/Eastern -- the slate boundary the schedule uses."""
+    return now_eastern().date()
+
+
+def match_datetime(row):
+    """A row's kickoff as a naive Eastern datetime, or None if undated.
+
+    Falls back to the start of the day when match_time is missing so a dateless
+    row still sorts/filters sanely."""
+    d = parse_date(row.get("match_date"))
+    if d is None:
+        return None
+    raw_time = (row.get("match_time") or "").strip()
+    hh = mm = 0
+    if raw_time:
+        try:
+            parts = raw_time.split(":")
+            hh, mm = int(parts[0]), int(parts[1]) if len(parts) > 1 else 0
+        except (ValueError, IndexError):
+            hh = mm = 0
+    return datetime(d.year, d.month, d.day, hh, mm)
+
+
+def match_has_started(row, grace_minutes=0, now=None):
+    """True once a match's kickoff time (Eastern) is in the past.
+
+    This is the time-based gate the boards use to stop showing a game *without*
+    dropping the rest of that day's slate: an early kickoff disappears once it
+    starts while later games the same day stay up. A row with no kickoff time
+    only "starts" once its whole Eastern day is over (kept until midnight), so
+    a missing time never hides a game early.
+    """
+    kickoff = match_datetime(row)
+    if kickoff is None:
+        return False
+    now = now or now_eastern()
+    if not (row.get("match_time") or "").strip():
+        # No real kickoff time: don't guess -- keep it up through its own day.
+        return now.date() > kickoff.date()
+    return now >= kickoff + timedelta(minutes=grace_minutes)
+
+
 def mean(values):
     nums = [v for v in values if v is not None]
     return sum(nums) / len(nums) if nums else None

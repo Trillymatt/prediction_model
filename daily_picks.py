@@ -489,7 +489,7 @@ def _build_soccer():
                       if p.get("slate_team") in match_teams][:GAME_PICKS],
         })
 
-    note = (None if slate_date == date.today().isoformat()
+    note = (None if slate_date == sc.today_eastern().isoformat()
             else f"No matches today — showing the {slate_date} slate.")
     return {"slate_date": slate_date, "picks": board, "games": games_board,
             "note": note}

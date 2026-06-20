@@ -96,18 +96,28 @@ def confidence_label(confidence: float) -> str:
 # Schedule helpers
 # ---------------------------------------------------------------------------
 def upcoming_games(days: int = 10) -> list:
-    """Upcoming matches in the next `days` days, soonest first."""
-    from datetime import date, timedelta
-    today = date.today().isoformat()
-    horizon = (date.today() + timedelta(days=days)).isoformat()
+    """Upcoming matches in the next `days` days, soonest first.
+
+    "Upcoming" is decided by KICKOFF TIME, not just the date: a match that has
+    already kicked off today is dropped, while the rest of that day's slate
+    stays up. Boundaries are evaluated in US/Eastern (what the schedule stores),
+    so an evening match isn't hidden hours early by the server's UTC clock.
+    """
+    from datetime import timedelta
+    today = sc.today_eastern()
+    today_iso = today.isoformat()
+    horizon = (today + timedelta(days=days)).isoformat()
     rows = sc.fetch_all(
         sc.SCHEDULE_TABLE,
         "match_id,match_date,match_time,competition,home_team,away_team",
         filters=[("eq", "status", "upcoming"),
-                 ("gte", "match_date", today),
+                 ("gte", "match_date", today_iso),
                  ("lte", "match_date", horizon)],
         order_col="match_date",
     )
+    # Hide games whose kickoff has already passed (time-based, not date-based).
+    now = sc.now_eastern()
+    rows = [g for g in rows if not sc.match_has_started(g, now=now)]
     # World Cup matches first within each day -- that's what this is for.
     rows.sort(key=lambda g: (g.get("match_date") or "",
                              0 if sc.is_world_cup(g.get("competition")) else 1,
