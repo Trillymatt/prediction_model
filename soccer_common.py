@@ -53,6 +53,27 @@ LAMBDA_FLOOR = 0.15                       # no team's xG expectation hits zero
 FORM_DAMPENING = 0.45                     # how hard recent GF/GA moves the total
 FORM_WINDOW = 15                          # completed matches per team for form
 
+# --- World-Cup-aware tuning (iterate these against 25_soccer_backtest.py) ----
+# Recent form is a blend of friendlies, qualifiers and tournament games. They
+# don't carry equal signal: a World Cup result says far more about a side than
+# a friendly where coaches rotate freely. We weight each form match by its
+# competition when averaging GF/GA. Setting every weight to 1.0 reproduces the
+# old flat mean, so the backtest can A/B the effect.
+COMPETITION_FORM_WEIGHTS = {
+    "world_cup": 1.5,     # the finals themselves
+    "competitive": 1.0,   # qualifiers, Nations League, continental cups
+    "friendly": 0.5,      # rotated line-ups, low stakes
+}
+
+# The broad international set (friendlies + qualifiers + continental cups) runs
+# hotter than the World Cup finals, which are tighter and more cautious. For a
+# WC match we shrink a WC-specific scoring average (from finals played so far)
+# toward a researched WC prior, then blend that with the all-international
+# baseline so a short tournament can't swing the number wildly.
+WC_BASE_TOTAL_GOALS = 2.45     # prior: goals per MATCH (both teams) at the finals
+WC_BASELINE_PRIOR_N = 12       # shrinkage strength toward the WC prior
+WC_BASELINE_BLEND = 0.6        # 0 = all-international baseline, 1 = WC-only
+
 WC_HOSTS = {"United States", "Mexico", "Canada"}
 WORLD_CUP_NAMES = ("fifa world cup", "world cup")
 
@@ -490,6 +511,51 @@ def team_recent_form(schedule_rows, team, window=FORM_WINDOW):
     return out[-window:]
 
 
+def competition_form_weight(competition) -> float:
+    """How much a form match counts, by its competition (see
+    COMPETITION_FORM_WEIGHTS). Mirrors the Elo K-factor tiers."""
+    comp = (competition or "").lower()
+    if is_world_cup(comp):
+        return COMPETITION_FORM_WEIGHTS["world_cup"]
+    if "friendly" in comp:
+        return COMPETITION_FORM_WEIGHTS["friendly"]
+    return COMPETITION_FORM_WEIGHTS["competitive"]
+
+
+def scoring_baseline(schedule_rows, competition=None):
+    """Goals-per-team-per-match baseline for a match's competition.
+
+    Non-WC matches use the plain all-international average. WC matches use a
+    WC-aware number: the finals played so far (shrunk toward a researched WC
+    prior so an early, small sample doesn't dominate), blended with the broad
+    baseline. Returns goals per team per match, like league_scoring_average.
+    """
+    overall = league_scoring_average(schedule_rows)
+    if not is_world_cup(competition):
+        return overall
+
+    wc_total, wc_n = 0.0, 0
+    for g in schedule_rows:
+        if g.get("status") != "completed":
+            continue
+        if not is_world_cup(g.get("competition")):
+            continue
+        hs, as_ = g.get("home_score"), g.get("away_score")
+        if hs is None or as_ is None:
+            continue
+        wc_total += hs + as_
+        wc_n += 1
+
+    wc_prior = WC_BASE_TOTAL_GOALS / 2.0   # per team
+    if wc_n:
+        wc_sample = wc_total / (2 * wc_n)
+        wc_avg = ((wc_n * wc_sample + WC_BASELINE_PRIOR_N * wc_prior)
+                  / (wc_n + WC_BASELINE_PRIOR_N))
+    else:
+        wc_avg = wc_prior
+    return WC_BASELINE_BLEND * wc_avg + (1.0 - WC_BASELINE_BLEND) * overall
+
+
 def expected_goals(home, away, schedule_rows=None, competition="FIFA World Cup"):
     """Expected goals for each side of a match -- the heart of both engines.
 
@@ -498,10 +564,11 @@ def expected_goals(home, away, schedule_rows=None, competition="FIFA World Cup")
          which SPLITS the goals between the sides via an odds-ratio curve.
          Hosts get a home-edge bonus at the World Cup (true home sides get
          it elsewhere).
-      2. Recent form (last FORM_WINDOW internationals) -> goals scored /
-         conceded rates vs the international average, dampened, which sets
-         how OPEN the match is (the expected total).
-      3. The international scoring baseline (league_scoring_average).
+      2. Recent form (last FORM_WINDOW internationals, weighted by competition
+         so WC games count more than friendlies) -> goals scored / conceded
+         rates vs the baseline, dampened, which sets how OPEN the match is.
+      3. The scoring baseline (scoring_baseline): all-international, or a
+         WC-aware number for World Cup matches.
 
     Returns a dict with lambda_home/lambda_away plus every intermediate
     number, so the factor cards can show exactly why.
@@ -520,13 +587,20 @@ def expected_goals(home, away, schedule_rows=None, competition="FIFA World Cup")
     diff = (elo_home + home_bonus) - elo_away
     win_expectancy = 1.0 / (1.0 + 10 ** (-diff / 400.0))
 
-    base = league_scoring_average(schedule_rows)  # goals per team per match
+    base = scoring_baseline(schedule_rows, competition)  # goals per team per match
     home_form = team_recent_form(schedule_rows, home)
     away_form = team_recent_form(schedule_rows, away)
 
     def rate(form, key):
-        vals = [m[key] for m in form]
-        return (sum(vals) / len(vals)) if vals else None
+        # Competition-weighted mean: a World Cup result counts more than a
+        # friendly (COMPETITION_FORM_WEIGHTS), so form reflects games that
+        # actually say something about the side.
+        num = den = 0.0
+        for m in form:
+            w = competition_form_weight(m.get("competition"))
+            num += w * m[key]
+            den += w
+        return (num / den) if den else None
 
     h_gf, h_ga = rate(home_form, "scored"), rate(home_form, "allowed")
     a_gf, a_ga = rate(away_form, "scored"), rate(away_form, "allowed")
