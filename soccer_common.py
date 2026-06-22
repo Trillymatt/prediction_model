@@ -331,6 +331,18 @@ def team_profile(team: str) -> dict:
     return load_priors()["teams"].get(normalize_team(team), {})
 
 
+# Goalkeeper position abbreviations as they arrive from ESPN (entry.position)
+# and the priors' key_players notes ("(GK, ...)").
+GOALKEEPER_CODES = {"g", "gk"}
+
+
+def is_goalkeeper(position) -> bool:
+    """True if a position string denotes a goalkeeper (ESPN 'G'/'GK', etc.)."""
+    if not position:
+        return False
+    return str(position).strip().lower() in GOALKEEPER_CODES
+
+
 # ---------------------------------------------------------------------------
 # Optional log columns (shared by the puller and the props engine)
 # ---------------------------------------------------------------------------
