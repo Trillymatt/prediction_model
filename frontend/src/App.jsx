@@ -1237,6 +1237,7 @@ const SOCCER_STAT_LABELS = {
   passes: "Passes",
   tackles: "Tackles",
   saves: "Saves (GK)",
+  goals_conceded: "Goals Conceded / Clean Sheet",
   cards: "Cards (Yellow + Red)",
   fouls_committed: "Fouls Committed",
   fouls_suffered: "Fouls Drawn",
@@ -1244,8 +1245,8 @@ const SOCCER_STAT_LABELS = {
 
 const SOCCER_STAT_ORDER = [
   "goals", "assists", "goals_assists", "shots", "shots_on_target",
-  "key_passes", "passes", "tackles", "cards", "fouls_committed",
-  "fouls_suffered", "saves",
+  "key_passes", "passes", "tackles", "saves", "goals_conceded", "cards",
+  "fouls_committed", "fouls_suffered",
 ];
 
 function sortSoccerStats(stats) {

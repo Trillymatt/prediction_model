@@ -29,6 +29,12 @@ DEFAULT_STATS = ["points", "rebounds", "assists", "threes", "pra"]
 # Soccer equivalents: the markets people actually shop, in confidence order.
 SOCCER_DEFAULT_STATS = ["goals", "assists", "goals_assists", "shots",
                         "shots_on_target"]
+# Goalkeepers don't shoot -- lead with the keeper markets (saves, passes from
+# the build-out, goals conceded / clean sheet from the goal model) and keep
+# goals/assists at the back so the rare keeper goal is still there to bet.
+# Stats whose data isn't loaded (e.g. saves before the column exists) are
+# filtered out downstream, so this degrades to whatever is available.
+SOCCER_GK_STATS = ["saves", "passes", "goals_conceded", "goals", "assists"]
 
 # Recent-minutes floor for who shows on a soccer roster. Lower than the picks
 # board's 30 so squad players (not just nailed-on starters) appear, while still
@@ -60,6 +66,21 @@ def _suggest_line(projection: float) -> float:
     if line == int(line):                     # whole number -> drop to the .5 below
         line -= 0.5
     return max(0.5, round(line, 1))
+
+
+def _soccer_default_stats(engine, player_name):
+    """Pick the right default markets for a soccer player by position: keeper
+    markets for goalkeepers, the attacking set for everyone else. Falls back to
+    the attacking set if the player or his position can't be resolved (the
+    optional soccer_players directory may not carry a position)."""
+    try:
+        sc = engine.sc
+        player = engine.find_player(player_name)
+        if sc.is_goalkeeper(player.get("position")):
+            return SOCCER_GK_STATS
+    except Exception:  # noqa: BLE001 - unknown position => attacking defaults
+        pass
+    return SOCCER_DEFAULT_STATS
 
 
 def _project(engine, sport, player, stat, line, opponent, location, game_type):
@@ -208,20 +229,51 @@ def _soccer_team_players(sc, team: str) -> list:
     return out
 
 
+def _soccer_positions(sc, player_ids) -> dict:
+    """player_id -> position from the optional soccer_players directory, so the
+    roster can flag goalkeepers (and the frontend lead with keeper markets).
+    Returns {} if the table/column isn't there -- positions just stay unknown."""
+    if not player_ids:
+        return {}
+    out = {}
+    try:
+        for chunk in _chunks(list(player_ids), 150):
+            res = (
+                sc.supabase.table(sc.PLAYERS_TABLE)
+                .select("player_id,position")
+                .in_("player_id", chunk)
+                .execute()
+            )
+            for row in res.data or []:
+                out[row["player_id"]] = row.get("position")
+    except Exception:  # noqa: BLE001 - directory missing => positions unknown
+        return {}
+    return out
+
+
 def soccer_roster(soccer, home: str, away: str) -> dict:
     """Both squads for a match, most-used players first -- the soccer twin of
     nba_roster(). Player opponent is carried at the team level (soccer
-    projections take only an opponent, no home/away split)."""
+    projections take only an opponent, no home/away split). Each player carries
+    his position + an is_goalkeeper flag so the UI can lead keepers with saves
+    instead of goals."""
     sc = soccer.sc
     home_n = sc.normalize_team(home)
     away_n = sc.normalize_team(away)
     teams = []
     for team, side, opp in ((home_n, "home", away_n), (away_n, "away", home_n)):
+        players = _soccer_team_players(sc, team)
+        positions = _soccer_positions(sc, [p["player_id"] for p in players])
+        for p in players:
+            pos = positions.get(p["player_id"])
+            if pos:
+                p["position"] = pos
+            p["is_goalkeeper"] = sc.is_goalkeeper(pos)
         teams.append({
             "abbr": team,
             "side": side,
             "opponent": opp,
-            "players": _soccer_team_players(sc, team),
+            "players": players,
         })
     return {"home_team": home_n, "away_team": away_n, "teams": teams}
 
@@ -238,7 +290,10 @@ def player_projections(engine, player: str, stats=None, opponent: str = None,
     for each stat so the frontend can show the numbers and compute an instant
     over/under read for any line the user types (same normal-CDF math the
     engine uses), and pre-fill a suggested line per stat."""
-    defaults = SOCCER_DEFAULT_STATS if sport == "soccer" else DEFAULT_STATS
+    if sport == "soccer" and not stats:
+        defaults = _soccer_default_stats(engine, player)
+    else:
+        defaults = SOCCER_DEFAULT_STATS if sport == "soccer" else DEFAULT_STATS
     stats = [s for s in (stats or defaults) if s in engine.STAT_DEFS]
 
     meta = {}
@@ -252,7 +307,7 @@ def player_projections(engine, player: str, stats=None, opponent: str = None,
         if not meta:
             meta = {k: r.get(k) for k in
                     ("player_name", "team", "position", "opponent", "home_away")}
-        projections.append({
+        entry = {
             "stat": stat,
             "projection": r["projection"],
             "sigma": r["sigma"],
@@ -260,7 +315,12 @@ def player_projections(engine, player: str, stats=None, opponent: str = None,
             "l10": r.get("l10"),
             "season_avg": r.get("season_avg") or r.get("avg"),
             "suggested_line": _suggest_line(r["projection"]),
-        })
+        }
+        # Clean-sheet read rides along with goals conceded so the UI can show
+        # the shutout market without a second call.
+        if r.get("p_clean_sheet") is not None:
+            entry["p_clean_sheet"] = r["p_clean_sheet"]
+        projections.append(entry)
 
     if not projections:
         raise LookupError(f"Couldn't project any stats for '{player}'.")

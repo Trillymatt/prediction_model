@@ -51,10 +51,39 @@ alter table soccer_player_match_logs
 Notes on existing columns: `xg`, `xa` and `key_passes` stay NULL when data
 comes from the ESPN feed (it doesn't publish them). `passes` is filled for
 FIFA World Cup matches by `24_soccer_fifa_passes.py` (FIFA's official match
-API -- runs in the nightly pipeline after 21); other competitions stay NULL
-because no free source carries pass data for them anymore (FBref lost its
-Opta feed in 2025). The engine uses whatever is present; nothing breaks
-while a column is NULL.
+API -- runs in the nightly pipeline after 21); `saves` is filled from ESPN
+where it carries them and now also from FIFA's feed for WC matches; other
+competitions stay NULL because no free source carries pass data for them
+anymore (FBref lost its Opta feed in 2025). The engine uses whatever is
+present; nothing breaks while a column is NULL.
+
+### Goalkeeper, clean-sheet and passes markets
+
+The tool is position-aware. For a **goalkeeper** (detected from
+`soccer_players.position` = `G`/`GK`) the "what he's projected for" view leads
+with keeper markets — **saves**, **passes**, **goals conceded / clean sheet** —
+and keeps goals/assists at the back. For this to light up:
+
+1. **Add the optional columns** (the `passes`/`saves`/... SQL block above).
+   Without `saves`/`passes` those two markets simply don't appear; nothing
+   errors.
+2. **Populate positions.** The keeper detection reads `soccer_players.position`.
+   `21_soccer_player_logs.py` writes it for every player it ingests, so a
+   normal backfill/run fills it. If `soccer_players` is empty, everyone is
+   treated as an outfielder (attacking defaults).
+3. **Run the enrichment** for saves/passes on WC matches:
+   `python 24_soccer_fifa_passes.py` (or `--backfill 2026-06-11`). It now fills
+   `saves` alongside `passes` when the column exists.
+
+**Goals conceded / clean sheet** needs **none** of the above — it's derived
+from the match goal model (the opponent's expected goals against the player's
+team, `P(0)` = clean-sheet chance), so it works for any keeper/defender on a
+scheduled team right now. It's exposed as the `goals_conceded` stat (grade
+UNDER 0.5 = the shutout bet).
+
+As more WC matches are played, `saves`/`passes` history accumulates and the
+per-90 rates (and the knockout-round over/under reads on passes) sharpen — the
+same way Elo/form do.
 
 ## 2. Seed the data (one-time, ~10 minutes)
 

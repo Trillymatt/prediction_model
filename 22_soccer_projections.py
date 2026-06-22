@@ -112,7 +112,24 @@ STAT_NOUNS = {
     "key_passes": "key passes", "cards": "cards", "passes": "passes",
     "tackles": "tackles", "saves": "saves",
     "fouls_committed": "fouls committed", "fouls_suffered": "fouls drawn",
+    "goals_conceded": "goals conceded",
 }
+
+# Stats that don't come from a player's own log column but from the team goal
+# model (the opponent's expected goals against this player's side). Registered
+# in STAT_DEFS so the API/CLI accept them, but routed to a separate projector.
+# goals_conceded doubles as the clean-sheet market (clean sheet = 0 conceded),
+# which is the natural keeper/defender bet. Always available -- it needs only
+# the schedule + Elo, no optional log columns.
+GOAL_MODEL_STATS = {"goals_conceded"}
+for _s in GOAL_MODEL_STATS:
+    STAT_DEFS.setdefault(_s, [])
+
+# Stats whose volume is driven by how much of the team's output a player
+# personally takes on -- the "why HE gets the chances" usage signal. Shown
+# with a role factor computed from his share of the team's recent attempts.
+USAGE_STATS = {"goals", "assists", "goals_assists", "shots",
+               "shots_on_target", "key_passes", "passes"}
 
 # Stats that scale with how much the player's team attacks. Cards/saves/fouls
 # don't follow team goal expectation, so they stay unscaled.
@@ -291,10 +308,154 @@ def per90_decayed(rows, columns):
 
 
 # ---------------------------------------------------------------------------
+# Team usage / role (the player-specific "why HE gets the chances" signal)
+# ---------------------------------------------------------------------------
+import time as _time
+
+_team_logs_cache = {}        # team -> (monotonic_at, rows)
+TEAM_LOGS_TTL = 120.0        # match the schedule cache; data only moves on a run
+USAGE_WINDOW_MATCHES = 8     # recent team matches the share is measured over
+
+
+def fetch_team_logs(team: str) -> list:
+    """All log rows for a team (cached), so the usage share doesn't re-page the
+    table once per stat in the multi-prop view."""
+    now = _time.monotonic()
+    hit = _team_logs_cache.get(team)
+    if hit and now - hit[0] < TEAM_LOGS_TTL:
+        return hit[1]
+    rows = sc.fetch_all(sc.LOGS_TABLE, ",".join(LOG_COLUMNS),
+                        filters=[("eq", "team", team)], order_col="match_date")
+    norm = sc.normalize_team(team)
+    if not rows and norm != team:
+        rows = sc.fetch_all(sc.LOGS_TABLE, ",".join(LOG_COLUMNS),
+                            filters=[("eq", "team", norm)], order_col="match_date")
+    _team_logs_cache[team] = (now, rows)
+    return rows
+
+
+def team_usage_share(team, player_id, columns, window=USAGE_WINDOW_MATCHES):
+    """How much of the team's recent output in this stat the player takes on.
+
+    Returns {share, team_per_match, player_per_match, matches} over the team's
+    last `window` matches that actually carry the stat, or None when there's no
+    team data (e.g. an enriched stat with no rows yet). This is the genuinely
+    per-player number behind 'why he shoots/passes more than a teammate'.
+    """
+    rows = fetch_team_logs(team)
+    if not rows:
+        return None
+    have = [r for r in rows if any(r.get(c) is not None for c in columns)]
+    if not have:
+        return None
+    recent_dates = sorted({r.get("match_date") for r in have if r.get("match_date")})[-window:]
+    recent = [r for r in have if r.get("match_date") in recent_dates]
+    team_total = sum(match_value(r, columns) for r in recent)
+    team_matches = len(recent_dates)
+    if team_total <= 0 or team_matches == 0:
+        return None
+    player_rows = [r for r in recent if r.get("player_id") == player_id]
+    player_total = sum(match_value(r, columns) for r in player_rows)
+    player_matches = len({r.get("match_date") for r in player_rows}) or 1
+    return {
+        "share": player_total / team_total,
+        "team_per_match": team_total / team_matches,
+        "player_per_match": player_total / player_matches,
+        "matches": team_matches,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Fixture resolution + oriented team goal model (shared by every stat path)
+# ---------------------------------------------------------------------------
+def resolve_fixture(team, opponent, schedule):
+    """(opponent, home_away, match_date, competition) for a team's next match,
+    or for an explicitly-named opponent (orientation corrected so the host Elo
+    edge lands on the right side)."""
+    home_away = next_date = competition = None
+    if opponent is None:
+        opponent, home_away, next_date, competition = next_match_for_team(
+            team, schedule)
+    opponent = sc.normalize_team(opponent) if opponent else None
+    if opponent and home_away is None:
+        for g in schedule:
+            if g.get("status") != "upcoming":
+                continue
+            h = sc.normalize_team(g.get("home_team"))
+            a = sc.normalize_team(g.get("away_team"))
+            if {h, a} == {team, opponent}:
+                home_away = "HOME" if team == h else "AWAY"
+                next_date = next_date or g.get("match_date")
+                competition = competition or g.get("competition")
+                break
+        if home_away is None:
+            home_away = "AWAY" if opponent in sc.WC_HOSTS else "HOME"
+    return opponent, home_away, next_date, competition
+
+
+def oriented_lambdas(team, opponent, home_away, schedule, competition):
+    """Expected goals for/against this team, oriented by home/away so the host
+    bonus is applied correctly. team_lambda = the team's attack, opp_lambda =
+    goals expected against them (the goals-conceded / clean-sheet input)."""
+    comp = competition or "FIFA World Cup"
+    if home_away == "AWAY":
+        xg = sc.expected_goals(opponent, team, schedule_rows=schedule,
+                               competition=comp)
+        return {"xg": xg, "team_lambda": xg["lambda_away"],
+                "opp_lambda": xg["lambda_home"], "opp_elo": xg["elo_home"],
+                "team_gf": xg["away_gf"]}
+    xg = sc.expected_goals(team, opponent, schedule_rows=schedule,
+                           competition=comp)
+    return {"xg": xg, "team_lambda": xg["lambda_home"],
+            "opp_lambda": xg["lambda_away"], "opp_elo": xg["elo_away"],
+            "team_gf": xg["home_gf"]}
+
+
+# ---------------------------------------------------------------------------
 # Factor cards
 # ---------------------------------------------------------------------------
+def _role_phrase(share: float) -> str:
+    """Plain-language role from a player's share of his team's attempts."""
+    if share >= 0.30:
+        return "the focal point"
+    if share >= 0.18:
+        return "a primary option"
+    if share >= 0.10:
+        return "a regular contributor"
+    if share >= 0.04:
+        return "a secondary option"
+    return "a peripheral source"
+
+
+def _possession_note(team_profile, stat) -> str:
+    """One clause tying the team's playing style to this stat's volume, drawn
+    from the scouting profile -- so the 'why' isn't identical across players."""
+    style = (team_profile or {}).get("style") or ""
+    low = style.lower()
+    possession = any(w in low for w in ("possession", "patient", "control",
+                                        "build", "passing"))
+    transition = any(w in low for w in ("counter", "transition", "direct",
+                                        "vertical", "press"))
+    if stat == "passes":
+        if possession:
+            return ("They hold the ball and build patiently, so on-ball "
+                    "players rack up passing volume.")
+        if transition:
+            return ("They play direct and in transition, so total passes run "
+                    "lower than a possession side's.")
+        return ("Passing volume tracks how much of the ball the side keeps in "
+                "a given match.")
+    if possession:
+        return ("A possession-heavy side means more time on the ball and more "
+                "chances created for the players it runs its attack through.")
+    if transition:
+        return ("A transition-first side creates fewer but sharper chances, so "
+                "volume concentrates on the players who finish the breaks.")
+    return ""
+
+
 def build_factors(result, stat, opponent, team, exp_minutes, matchup, xg,
-                  opp_profile, team_profile):
+                  opp_profile, team_profile, usage=None):
     noun = STAT_NOUNS.get(stat, stat)
     rnd = lambda v, n=2: round(v, n) if isinstance(v, (int, float)) else v
     factors = []
@@ -320,6 +481,30 @@ def build_factors(result, stat, opponent, team, exp_minutes, matchup, xg,
         "value": f"{result['per90_blend']} {noun} per 90",
         "detail": form_detail,
     })
+
+    # 1b) Usage / role -- the player-specific "why HE gets the chances". His
+    # share of the team's recent output in this stat, phrased per player and
+    # tied to how the team plays, so two players on the same side don't get the
+    # same boilerplate.
+    if usage and stat in USAGE_STATS and usage.get("team_per_match"):
+        share = usage["share"]
+        role = _role_phrase(share)
+        verb = {"passes": "attempts", "key_passes": "creates",
+                "assists": "sets up", "saves": "makes"}.get(stat, "takes")
+        detail = (
+            f"Over {team}'s last {usage['matches']} matches he {verb} "
+            f"{usage['player_per_match']:.1f} {noun} a game — about "
+            f"{share * 100:.0f}% of the team's {usage['team_per_match']:.1f}, "
+            f"making him {role} for {noun} on this side. "
+        )
+        pn = _possession_note(team_profile, stat)
+        if pn:
+            detail += pn
+        factors.append({
+            "title": "Role in the attack" if stat != "passes" else "Role on the ball",
+            "value": f"{share * 100:.0f}% of {team}'s {noun} — {role}",
+            "detail": detail,
+        })
 
     # 2) Expected minutes.
     factors.append({
@@ -404,6 +589,113 @@ def build_factors(result, stat, opponent, team, exp_minutes, matchup, xg,
 
 
 # ---------------------------------------------------------------------------
+# Goal-model stats (goals conceded / clean sheet) -- a team-level projection
+# assigned to the player (keepers and defenders). Driven by the opponent's
+# expected goals against the player's side, not his own logs.
+# ---------------------------------------------------------------------------
+def build_conceded_factors(result, opponent, team, o, opp_profile,
+                           team_profile, p_clean):
+    rnd = lambda v, n=2: round(v, n) if isinstance(v, (int, float)) else v
+    factors = []
+    factors.append({
+        "title": "Opponent attack",
+        "value": f"{opponent} (Elo {o['opp_elo']}) → {rnd(o['opp_lambda'])} "
+                 f"expected goals",
+        "detail": (
+            f"The goals-conceded line is driven by how much {opponent} is "
+            f"expected to score against {team}: {rnd(o['opp_lambda'])} goals, "
+            f"from the same Elo + form goal model the match outcome uses."
+            + (f" Scouting on {opponent}'s attack: {opp_profile['attack']}"
+               if (opp_profile or {}).get("attack") else "")
+        ),
+    })
+    factors.append({
+        "title": "Clean sheet chance",
+        "value": f"{p_clean * 100:.0f}% shutout",
+        "detail": (
+            f"From a Poisson on {rnd(o['opp_lambda'])} expected goals against, "
+            f"{team} keeps a clean sheet about {p_clean * 100:.0f}% of the "
+            f"time — the under-0.5 goals-conceded bet."
+            + (f" {team}'s defense: {team_profile['defense']}"
+               if (team_profile or {}).get("defense") else "")
+        ),
+    })
+    if (team_profile or {}).get("coach"):
+        factors.append({
+            "title": "Tournament context",
+            "value": result.get("competition") or "International",
+            "detail": f"Coach: {team_profile['coach']}",
+        })
+    factors.append({
+        "title": "Projection method",
+        "value": f"Poisson → {result['projection']} goals conceded",
+        "detail": ("Goals conceded follow a Poisson on the opponent's expected "
+                   "goals, so the over/under (and the clean-sheet/shutout "
+                   "market) come straight from the tournament goal model."),
+    })
+    return factors
+
+
+def _project_goal_model_stat(player, team, stat, line, opponent):
+    """Project goals_conceded (and the clean-sheet read) for a player's team."""
+    schedule = sc.fetch_schedule_rows()
+    opponent, home_away, next_date, competition = resolve_fixture(
+        team, opponent, schedule)
+    if not opponent:
+        raise LookupError(
+            f"Couldn't find {team}'s next match to project {STAT_NOUNS[stat]}. "
+            f"Pass an opponent explicitly."
+        )
+    o = oriented_lambdas(team, opponent, home_away, schedule, competition)
+    lam = max(o["opp_lambda"], 0.05)
+    p_clean = sc.poisson_pmf(0, lam)
+
+    result = {
+        "method": "goal_model",
+        "distribution": "poisson",
+        "player_name": player["player_name"],
+        "player_id": player["player_id"],
+        "team": team,
+        "position": player.get("position"),
+        "stat": stat,
+        "opponent": opponent,
+        "home_away": home_away,
+        "match_date": next_date,
+        "competition": competition,
+        "projection": round(lam, 2),
+        "sigma": round(math.sqrt(lam), 2),
+        "p_clean_sheet": round(p_clean, 4),
+        "line": line,
+    }
+    result["factors"] = build_conceded_factors(
+        result, opponent, team, o,
+        sc.team_profile(opponent), sc.team_profile(team), p_clean,
+    )
+
+    if line is not None:
+        p_over, p_push, p_under = sc.poisson_line_probs(line, lam)
+        settle = p_over + p_under
+        if settle > 0:
+            p_over, p_under = p_over / settle, p_under / settle
+        if p_push > 0.02:
+            result["p_push"] = round(p_push, 4)
+            result["note"] = (
+                f"Whole-number line: {p_push * 100:.0f}% chance of a push "
+                f"(refund). Probabilities shown assume the bet settles."
+            )
+        pick = "OVER" if p_over >= 0.5 else "UNDER"
+        confidence = max(p_over, p_under)
+        result.update({
+            "p_over": round(p_over, 4),
+            "p_under": round(p_under, 4),
+            "recommendation": pick,
+            "confidence": round(confidence, 4),
+            "confidence_label": confidence_label(confidence),
+        })
+    return result
+
+
+# ---------------------------------------------------------------------------
 # The projection engine
 # ---------------------------------------------------------------------------
 def project_soccer_player(player_name: str, stat: str, line: float = None,
@@ -431,6 +723,13 @@ def project_soccer_player(player_name: str, stat: str, line: float = None,
 
     team = sc.normalize_team(played[-1].get("team") or player.get("team"))
 
+    # Goal-model stats (goals conceded / clean sheet) don't come from the
+    # player's own logs -- they're the opponent's expected goals against his
+    # team. Route them to the dedicated projector (works for keepers and
+    # defenders, and needs no optional log columns).
+    if stat in GOAL_MODEL_STATS:
+        return _project_goal_model_stat(player, team, stat, line, opponent)
+
     # Rows that actually carry this stat. ESPN-fed stats are 0-filled on
     # every row, but enriched stats (passes -- filled from FIFA's feed for
     # World Cup matches only, see 24_soccer_fifa_passes.py) are NULL where
@@ -457,47 +756,17 @@ def project_soccer_player(player_name: str, stat: str, line: float = None,
 
     # --- Matchup: scale attacking output by the team goal model -------------
     schedule = sc.fetch_schedule_rows()
-    home_away = next_date = competition = None
-    if opponent is None:
-        opponent, home_away, next_date, competition = next_match_for_team(
-            team, schedule)
-    opponent = sc.normalize_team(opponent) if opponent else None
-
-    # An explicitly-passed opponent arrives without orientation. Look for the
-    # real fixture between the two teams first; failing that, assume the WC
-    # host (if either side is one) is the home team, so the host Elo edge
-    # lands on the right side either way.
-    if opponent and home_away is None:
-        for g in schedule:
-            if g.get("status") != "upcoming":
-                continue
-            h = sc.normalize_team(g.get("home_team"))
-            a = sc.normalize_team(g.get("away_team"))
-            if {h, a} == {team, opponent}:
-                home_away = "HOME" if team == h else "AWAY"
-                next_date = next_date or g.get("match_date")
-                competition = competition or g.get("competition")
-                break
-        if home_away is None:
-            home_away = "AWAY" if opponent in sc.WC_HOSTS else "HOME"
+    opponent, home_away, next_date, competition = resolve_fixture(
+        team, opponent, schedule)
 
     matchup = None
     xg_info = {"team_lambda": None, "team_norm": None, "opp_elo": None}
     if opponent and team:
-        # Orient the fixture so the host bonus lands on the right side.
-        if home_away == "AWAY":
-            xg = sc.expected_goals(opponent, team, schedule_rows=schedule,
-                                   competition=competition or "FIFA World Cup")
-            team_lambda, opp_elo = xg["lambda_away"], xg["elo_home"]
-            team_gf = xg["away_gf"]
-        else:
-            xg = sc.expected_goals(team, opponent, schedule_rows=schedule,
-                                   competition=competition or "FIFA World Cup")
-            team_lambda, opp_elo = xg["lambda_home"], xg["elo_away"]
-            team_gf = xg["home_gf"]
+        o = oriented_lambdas(team, opponent, home_away, schedule, competition)
+        team_lambda, opp_elo, team_gf = o["team_lambda"], o["opp_elo"], o["team_gf"]
         # Norm = the same recent scoring rate expected_goals used, so the
         # matchup ratio's numerator and denominator can never diverge.
-        team_norm = team_gf if team_gf else xg["league_avg_goals"]
+        team_norm = team_gf if team_gf else o["xg"]["league_avg_goals"]
         if team_norm:
             raw = team_lambda / team_norm
             matchup = min(MATCHUP_MAX,
@@ -544,9 +813,11 @@ def project_soccer_player(player_name: str, stat: str, line: float = None,
 
     opp_profile = sc.team_profile(opponent) if opponent else {}
     team_prof = sc.team_profile(team) if team else {}
+    usage = (team_usage_share(team, player["player_id"], columns)
+             if stat in USAGE_STATS else None)
     result["factors"] = build_factors(
         result, stat, opponent, team, exp_minutes, matchup, xg_info,
-        opp_profile, team_prof,
+        opp_profile, team_prof, usage,
     )
 
     # --- Grade the user's line -----------------------------------------------

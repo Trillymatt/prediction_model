@@ -68,10 +68,15 @@ HEADERS = {"User-Agent": "Mozilla/5.0 (prediction-model pass-stats sync; "
                          "mattknorman@gmail.com)"}
 
 # FIFA stat id -> our log column. Passes = attempted (PassesCompleted exists
-# too but books price attempts). Extend here if FIFA adds more useful ids.
+# too but books price attempts); Saves is the keeper market. Only columns that
+# actually exist in the table are written (set at runtime in main()), so a
+# missing optional column never breaks the update. Extend here for more ids.
 FIFA_STAT_MAP = {
     "Passes": "passes",
+    "Saves": "saves",
 }
+# Narrowed to the columns present in Supabase before any writes (see main()).
+ACTIVE_FIFA_STAT_MAP = dict(FIFA_STAT_MAP)
 
 
 def fold_name(name) -> str:
@@ -151,7 +156,8 @@ def fifa_player_passes(match: dict) -> dict:
         if pid == "-1" or pid not in names:
             continue
         by_id = {s[0]: s[1] for s in stat_list if isinstance(s, (list, tuple)) and s}
-        row = {col: by_id.get(fifa_id) for fifa_id, col in FIFA_STAT_MAP.items()
+        row = {col: by_id.get(fifa_id)
+               for fifa_id, col in ACTIVE_FIFA_STAT_MAP.items()
                if by_id.get(fifa_id) is not None}
         if row:
             out[fold_name(names[pid])] = row
@@ -246,9 +252,17 @@ def main():
     else:
         since = date.today() - timedelta(days=args.days_back)
 
-    if "passes" not in sc.optional_log_columns():
+    available = sc.optional_log_columns()
+    if "passes" not in available:
         raise SystemExit("soccer_player_match_logs has no passes column -- "
                          "run the SQL in SOCCER_SETUP.md first.")
+    # Only write columns that actually exist (saves is optional/bonus).
+    global ACTIVE_FIFA_STAT_MAP
+    ACTIVE_FIFA_STAT_MAP = {fid: col for fid, col in FIFA_STAT_MAP.items()
+                            if col in available}
+    extra = sorted(set(ACTIVE_FIFA_STAT_MAP.values()) - {"passes"})
+    if extra:
+        print(f"Also filling from FIFA: {', '.join(extra)}\n")
 
     matches = matches_to_process(since, match_id=args.match_id)
     print(f"{len(matches)} completed World Cup match(es) since {since}\n")
