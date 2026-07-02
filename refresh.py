@@ -13,10 +13,12 @@ When it does run, it executes the pipeline in dependency order:
     01 game logs -> 02 team stats -> 03 schedule -> 04 players ->
     05 defense-vs-pos -> 06 averages -> 07 head-to-head -> 08 injuries ->
     10 rebuild training data -> 11 retrain model -> 12/13 game model ->
-    20 soccer schedule -> 21 soccer player logs -> 24 FIFA pass stats
+    20 soccer schedule -> 21 soccer player logs -> 24 FIFA pass stats ->
+    30 NFL schedule
 
-The gate also checks soccer_schedule, so during the World Cup the soccer
-data refreshes nightly even on NBA off-nights (and vice versa).
+The gate also checks soccer_schedule and nfl_schedule, so during the World
+Cup / NFL season those sides refresh nightly even on NBA off-nights (and
+vice versa).
 
 Each step's output is streamed; a failing step is logged but doesn't abort the
 rest (the data scripts are all idempotent upserts, so a partial run is safe).
@@ -61,6 +63,7 @@ PIPELINE = [
     "20_soccer_schedule.py",
     "21_soccer_player_logs.py",
     "24_soccer_fifa_passes.py",
+    "30_nfl_schedule.py",
 ]
 
 
@@ -102,6 +105,22 @@ def soccer_matches_were_played(on_day: date) -> bool:
         return False
 
 
+def nfl_games_were_played(on_day: date) -> bool:
+    """True if nfl_schedule has any game dated `on_day`. Same contract as the
+    soccer gate: errors (table not created yet) count as 'no games'."""
+    try:
+        res = (
+            supabase.table("nfl_schedule")
+            .select("game_id")
+            .eq("game_date", on_day.isoformat())
+            .limit(1)
+            .execute()
+        )
+        return bool(res.data)
+    except Exception:  # noqa: BLE001 - NFL not set up => other gates decide
+        return False
+
+
 def schedule_is_stale() -> bool:
     """True if nba_schedule holds no future games -- the table needs reseeding.
 
@@ -139,12 +158,13 @@ def main():
     print(f"[{stamp}] refresh starting (yesterday = {yesterday})")
 
     if not force and not games_were_played(yesterday) \
-            and not soccer_matches_were_played(yesterday):
+            and not soccer_matches_were_played(yesterday) \
+            and not nfl_games_were_played(yesterday):
         if schedule_is_stale():
             print("Schedule table has no future games -- reseeding via full run.")
         else:
-            print("No NBA or soccer games found for yesterday -- nothing to "
-                  "refresh. Exiting.")
+            print("No NBA, soccer or NFL games found for yesterday -- nothing "
+                  "to refresh. Exiting.")
             return
 
     print("Games detected (or --force). Running pipeline.\n")

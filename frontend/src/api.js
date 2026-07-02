@@ -87,6 +87,12 @@ export function projectBatch(props, sport = "nba") {
   });
 }
 
+// ---- NFL (schedule only for now; projections land with the NFL pipeline) ---
+
+export function fetchUpcomingNflGames(days = 30) {
+  return getJSON(`/api/nfl/games?days=${days}`).then((d) => d.games);
+}
+
 // ---- Bet-slip analyzer -----------------------------------------------------
 
 // Upload a screenshot of a line/parlay; get each leg graded (our model for
