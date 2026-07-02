@@ -6,13 +6,16 @@ it. It's being built in stages:
 
 | Stage | What | Status |
 | --- | --- | --- |
-| 1 | Schedule ingestion (`30_nfl_schedule.py`) + `/api/nfl/games` + NFL tab | ✅ this release |
-| 2 | Team stats + player game logs ingestion | 🔜 next |
+| 1 | Schedule ingestion (`30_nfl_schedule.py`) + `/api/nfl/games` + NFL tab | ✅ done |
+| 2a | Roster directory (`31_nfl_rosters.py`) + `/api/nfl/players` + `/api/nfl/roster` + player search/roster UI | ✅ this release |
+| 2b | Team stats + player game logs ingestion (the data props need) | 🔜 next |
 | 3 | Game-outcome model (win prob, spread, total) | planned |
 | 4 | Player-prop projections (pass/rush/rec yards, TDs, receptions) | planned |
 
-The frontend NFL tab already shows the upcoming schedule; projections light
-up as the later stages land.
+The frontend NFL tab shows the upcoming schedule and lets you tap a game to
+see both rosters, or search any player by name — but there are no stats or
+projections behind them yet (that's stage 2b onward). Tapping a player shows
+a "coming soon" note instead of a projection.
 
 ## 1. Supabase table (run in the SQL editor)
 
@@ -34,10 +37,21 @@ create table if not exists nfl_schedule (
 );
 ```
 
-If RLS is enabled on your project, allow the service key to read/write it
-the same way your other tables do.
+```sql
+-- Player directory (powers autocomplete + the per-game roster view).
+create table if not exists nfl_players (
+  player_id   int4 primary key,   -- ESPN athlete id
+  player_name text,
+  team        text,               -- canonical team name, e.g. 'Kansas City Chiefs'
+  position    text,               -- e.g. 'QB', 'WR', 'CB'
+  created_at  timestamptz default now()
+);
+```
 
-## 2. Load the schedule
+If RLS is enabled on your project, allow the service key to read/write both
+tables the same way your other tables do.
+
+## 2. Load the schedule + rosters
 
 ```bash
 # Sanity-check the ESPN feed first (writes nothing):
@@ -46,8 +60,12 @@ python 30_nfl_schedule.py --check
 # Load the upcoming season (2026 schedule is already published):
 python 30_nfl_schedule.py --backfill 2026-08-01 --days-ahead 220
 
-# Nightly refresh (add to the same pipeline as the other pullers):
-python 30_nfl_schedule.py
+# Load rosters (all 32 teams; cheap, safe to re-run):
+python 31_nfl_rosters.py --check      # sanity-check first, writes nothing
+python 31_nfl_rosters.py
+
+# Nightly refresh -- both scripts are already in refresh.py's pipeline,
+# and it gates on nfl_schedule the same way it gates on soccer_schedule.
 ```
 
 Dates/kickoffs are stored in US/Eastern, statuses are
@@ -56,14 +74,22 @@ so the refresh gate and boards work the same way.
 
 ## 3. API
 
-`GET /api/nfl/games?days=30` returns the upcoming slate (soonest first,
-already-kicked-off games dropped). Like the soccer endpoints it degrades
-gracefully: if the table doesn't exist yet you get a 503 with a setup hint
-and the NBA/soccer sides keep working.
+- `GET /api/nfl/games?days=30` — upcoming slate (soonest first,
+  already-kicked-off games dropped).
+- `GET /api/nfl/players?q=<text>` — player autocomplete against the roster
+  directory.
+- `GET /api/nfl/roster?home=&away=` — both teams' rosters for a matchup,
+  ordered offense → defense → specialists (accepts full names or
+  abbreviations, e.g. `KC` or `Kansas City Chiefs`).
+
+Like the soccer endpoints, all three degrade gracefully: if a table doesn't
+exist yet you get a 503 with a setup hint and the NBA/soccer sides keep
+working.
 
 ## Data sources (for the next stages)
 
 - **Schedule / scores**: ESPN scoreboard API (in use, no key needed).
+- **Rosters**: ESPN team + roster API (in use, no key needed).
 - **Team & player stats**: ESPN summary/boxscore endpoints per event, or
   nflverse's public data releases (free CSVs, no key) for historical
   training data.

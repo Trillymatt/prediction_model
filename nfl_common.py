@@ -23,6 +23,7 @@ from supabase import create_client, Client
 # Configuration
 # ---------------------------------------------------------------------------
 SCHEDULE_TABLE = "nfl_schedule"
+PLAYERS_TABLE = "nfl_players"
 PAGE_SIZE = 1000                          # PostgREST page cap, same as elsewhere
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -182,6 +183,95 @@ def fetch_all(table: str, columns: str, filters=None, order_col=None):
             break
         start += PAGE_SIZE
     return rows
+
+
+# ---------------------------------------------------------------------------
+# Players (roster directory -- powers autocomplete + the per-game roster view;
+# stats/props come with the next pipeline stage, see NFL_SETUP.md)
+# ---------------------------------------------------------------------------
+# Same accent-insensitive substring approach as the NBA/soccer sides. Each
+# side keeps its own copy so the endpoints stay independent (see api.py).
+_ACCENT_CLASSES = {
+    "a": "aàáâãäåā", "c": "cçćč", "e": "eèéêëē", "g": "gğ", "i": "iìíîïıī",
+    "n": "nñń", "o": "oòóôõöø", "s": "sšş", "u": "uùúûü", "y": "yýÿ", "z": "zžź",
+}
+
+
+def _accent_regex(query: str) -> str:
+    import re
+    out = []
+    for ch in query:
+        cls = _ACCENT_CLASSES.get(ch.lower())
+        out.append(f"[{cls}]" if cls else re.escape(ch))
+    return "".join(out)
+
+
+def search_players(query: str, limit: int = 10) -> list:
+    """Autocomplete against nfl_players. Returns [] below 2 chars or if the
+    table isn't set up yet (caller decides how to surface that)."""
+    query = (query or "").strip()
+    if len(query) < 2:
+        return []
+    res = (
+        supabase.table(PLAYERS_TABLE)
+        .select("player_id,player_name,team,position")
+        .filter("player_name", "imatch", _accent_regex(query))
+        .order("player_name")
+        .limit(limit)
+        .execute()
+    )
+    return res.data or []
+
+
+# Rough offense -> defense -> specialists ordering so a roster reads like a
+# depth chart instead of an alphabetical dump.
+_POSITION_RANK = {
+    "QB": 0, "RB": 1, "FB": 2, "WR": 3, "TE": 4,
+    "T": 5, "G": 5, "C": 5, "OL": 5, "OT": 5, "OG": 5,
+    "DE": 6, "DT": 6, "NT": 6, "DL": 6,
+    "LB": 7, "OLB": 7, "ILB": 7, "MLB": 7,
+    "CB": 8, "S": 8, "SS": 8, "FS": 8, "DB": 8,
+    "K": 9, "P": 9, "LS": 9,
+}
+
+
+def _position_rank(pos):
+    return _POSITION_RANK.get((pos or "").upper(), 99)
+
+
+def roster_for_game(home, away) -> dict:
+    """Both teams' rosters for a matchup -- the NFL twin of
+    multi_props.nba_roster() / soccer_roster(), minus the stat-based
+    ranking (no player game logs yet). Players are ordered offense -> defense
+    -> specialists so the list reads like a depth chart."""
+    home_n, away_n = normalize_team(home), normalize_team(away)
+    if not home_n or not away_n:
+        raise ValueError(f"Unknown team in '{home}'/'{away}'.")
+
+    res = (
+        supabase.table(PLAYERS_TABLE)
+        .select("player_id,player_name,team,position")
+        .in_("team", [home_n, away_n])
+        .execute()
+    )
+    by_team = {home_n: [], away_n: []}
+    for r in res.data or []:
+        if r.get("team") in by_team:
+            by_team[r["team"]].append(r)
+
+    teams = []
+    for team, side, opp in ((home_n, "home", away_n), (away_n, "away", home_n)):
+        players = sorted(
+            by_team[team],
+            key=lambda p: (_position_rank(p.get("position")), p.get("player_name") or ""),
+        )
+        teams.append({
+            "abbr": team_abbr(team) or team,
+            "side": side,
+            "opponent": opp,
+            "players": players,
+        })
+    return {"home_team": home_n, "away_team": away_n, "teams": teams}
 
 
 def upcoming_games(days: int = 30) -> list:

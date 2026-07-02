@@ -16,6 +16,7 @@ import {
   fetchPlayerProjections,
   projectBatch,
   fetchUpcomingNflGames,
+  searchNflPlayers,
 } from "./api.js";
 
 // ===========================================================================
@@ -488,6 +489,8 @@ function RosterPlayerRow({ p, opponent, addProp, sport = "nba" }) {
   const stat =
     sport === "soccer"
       ? { val: p.ga_per90 != null ? `${p.ga_per90}` : "–", note: "G+A/90 · tap" }
+      : sport === "nfl"
+      ? { val: p.position || "–", note: "tap for info" }
       : { val: p.ppg != null ? `${p.ppg}` : "–", note: p.ppg != null ? "ppg · tap" : "tap for props" };
 
   return (
@@ -509,7 +512,16 @@ function RosterPlayerRow({ p, opponent, addProp, sport = "nba" }) {
           <span className="pick-prob">{stat.note}</span>
         </span>
       </button>
-      {open && (
+      {open && sport === "nfl" && (
+        <div className="pick-detail">
+          <div className="note nfl-note">
+            {p.player_name} · {p.team}
+            {p.position ? ` · ${p.position}` : ""}. Player props aren't live
+            yet for the NFL — check back once the projection model lands.
+          </div>
+        </div>
+      )}
+      {open && sport !== "nfl" && (
         <div className="pick-detail">
           <PlayerProjections
             player={player}
@@ -536,7 +548,9 @@ function RosterView({ roster, addProp, sport = "nba" }) {
             ? `${withFlag(roster.away_team)} ${sep} ${withFlag(roster.home_team)}`
             : `${roster.away_team} ${sep} ${roster.home_team}`}
         </label>
-        <span className="muted">tap any player for the model's read</span>
+        <span className="muted">
+          {sport === "nfl" ? "roster directory" : "tap any player for the model's read"}
+        </span>
       </div>
       {roster.teams.map((t) => (
         <div className="roster-team" key={t.abbr}>
@@ -1796,9 +1810,43 @@ function SoccerPropsView({ addProp }) {
 // ===========================================================================
 // NFL — schedule now, projections as the pipeline lands (see NFL_SETUP.md)
 // ===========================================================================
+// Search any player in the roster directory; shows team/position since
+// there's no projection engine yet (that's the next NFL pipeline stage).
+function NflPlayerLookup() {
+  const [player, setPlayer] = useState(null);
+
+  return (
+    <div className="card controls">
+      <div className="picks-head">
+        <label>🔎 Player lookup</label>
+        <span className="muted">roster directory</span>
+      </div>
+      <PlayerSearch
+        selected={player}
+        onSelect={setPlayer}
+        searchFn={searchNflPlayers}
+        sport="nfl"
+      />
+      {player && (
+        <div className="note nfl-note">
+          {player.player_name}
+          {player.team ? ` · ${player.team}` : ""}
+          {player.position ? ` · ${player.position}` : ""}. Props and
+          projections aren't live yet for the NFL — check back once the
+          model lands.
+        </div>
+      )}
+    </div>
+  );
+}
+
 function NflView() {
   const [games, setGames] = useState(null);
   const [error, setError] = useState("");
+  const [selected, setSelected] = useState(null);
+  const [roster, setRoster] = useState(null);
+  const [rosterError, setRosterError] = useState("");
+  const [rosterLoading, setRosterLoading] = useState(false);
 
   useEffect(() => {
     fetchUpcomingNflGames(60)
@@ -1821,6 +1869,17 @@ function NflView() {
       .join(" · ");
   };
 
+  const openRoster = (g) => {
+    setSelected(g.game_id);
+    setRoster(null);
+    setRosterError("");
+    setRosterLoading(true);
+    fetchRoster({ home: g.home_team, away: g.away_team, sport: "nfl" })
+      .then(setRoster)
+      .catch((e) => setRosterError(e.message))
+      .finally(() => setRosterLoading(false));
+  };
+
   return (
     <>
       <div className="card controls">
@@ -1829,9 +1888,9 @@ function NflView() {
           <span className="muted">2026 season</span>
         </div>
         <div className="note nfl-note">
-          NFL is new here — the schedule is live now, and game predictions +
-          player props are in the works. They'll show up on this tab as the
-          models come online.
+          NFL is new here — the schedule and rosters are live, and game
+          predictions + player props are in the works. Tap a game to see
+          both rosters.
         </div>
         {games === null && <Skeleton rows={5} />}
         {error && <div className="muted">Schedule unavailable: {error}</div>}
@@ -1851,7 +1910,11 @@ function NflView() {
                 )}
               </div>
               {day.games.map((g) => (
-                <div key={g.game_id} className="game-pick static">
+                <button
+                  key={g.game_id}
+                  className={`game-pick ${selected === g.game_id ? "active" : ""}`}
+                  onClick={() => openRoster(g)}
+                >
                   <span className="game-pick-main">
                     <span className="game-teams">
                       {g.away_team} <span className="vs-sep">@</span>{" "}
@@ -1861,12 +1924,24 @@ function NflView() {
                       {fmtKickoff(g.game_time) || "Kickoff TBD"}
                     </span>
                   </span>
-                </div>
+                </button>
               ))}
             </div>
           ))}
         </div>
+        {rosterLoading && (
+          <div className="muted crunching">
+            <span className="spinner" /> Loading rosters…
+          </div>
+        )}
+        {rosterError && (
+          <div className="muted">Rosters unavailable: {rosterError}</div>
+        )}
       </div>
+
+      {roster && <RosterView roster={roster} sport="nfl" />}
+
+      <NflPlayerLookup />
     </>
   );
 }

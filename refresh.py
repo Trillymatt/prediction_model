@@ -64,6 +64,7 @@ PIPELINE = [
     "21_soccer_player_logs.py",
     "24_soccer_fifa_passes.py",
     "30_nfl_schedule.py",
+    "31_nfl_rosters.py",
 ]
 
 

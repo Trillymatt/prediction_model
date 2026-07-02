@@ -49,7 +49,10 @@ export function projectGame({ home, away, date, gameId }) {
 // Every player on both teams of a game/match, most-used players first.
 export function fetchRoster({ home, away, sport = "nba" }) {
   const params = new URLSearchParams({ home, away });
-  const base = sport === "soccer" ? "/api/soccer/roster" : "/api/roster";
+  const base =
+    sport === "soccer" ? "/api/soccer/roster" :
+    sport === "nfl" ? "/api/nfl/roster" :
+    "/api/roster";
   return getJSON(`${base}?${params.toString()}`);
 }
 
@@ -87,10 +90,16 @@ export function projectBatch(props, sport = "nba") {
   });
 }
 
-// ---- NFL (schedule only for now; projections land with the NFL pipeline) ---
+// ---- NFL (schedule + roster directory; projections land with the pipeline) -
 
 export function fetchUpcomingNflGames(days = 30) {
   return getJSON(`/api/nfl/games?days=${days}`).then((d) => d.games);
+}
+
+export function searchNflPlayers(q) {
+  return getJSON(`/api/nfl/players?q=${encodeURIComponent(q)}`).then(
+    (d) => d.players
+  );
 }
 
 // ---- Bet-slip analyzer -----------------------------------------------------
