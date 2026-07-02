@@ -190,13 +190,6 @@ select:focus {
   border: 1px solid var(--border);
   border-radius: 10px;
   cursor: pointer;
-  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
-  white-space: nowrap;
-}
-
-.tab:hover {
-  border-color: var(--accent);
-  color: var(--text);
 }
 
 .tab.active {
@@ -205,96 +198,22 @@ select:focus {
   border-color: var(--accent);
 }
 
-/* Sticky nav: sport + mode tabs stay reachable while scrolling long boards. */
-.topnav {
-  position: sticky;
-  top: 0;
-  z-index: 30;
-  margin: 0 -6px;
-  padding: 8px 6px 10px;
-  background: rgba(13, 17, 23, 0.86);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-}
-
-.topnav .tabs {
-  margin-top: 0;
-}
-
-.topnav .mode-tabs {
-  margin-top: 8px;
-}
-
-/* Sport tabs scroll horizontally rather than crushing on narrow screens. */
-.sport-tabs {
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.sport-tabs::-webkit-scrollbar {
-  display: none;
-}
-
-.sport-tabs .tab {
-  flex: 1 0 auto;
-}
-
-.mode-tabs .tab {
-  padding: 9px 6px;
-  font-size: 13px;
-  border-radius: 8px;
-}
-
 /* ---- game outcome view ---- */
 .game-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   /* Long slates (World Cup group stage) scroll inside the card instead of
      pushing the prediction below the fold. */
-  max-height: 420px;
+  max-height: 340px;
   overflow-y: auto;
   padding-right: 2px;
 }
 
-/* One block per calendar day: a small header, then that day's games. */
-.game-day {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.game-day-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 8px;
-  margin-top: 4px;
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--muted);
-  position: sticky;
-  top: 0;
-  z-index: 5;
-  background: var(--card);
-  padding: 4px 2px;
-}
-
-/* Knockout round ("Round of 16") shown beside the day header. */
-.stage-label {
-  color: var(--accent);
-  font-size: 11px;
-  white-space: nowrap;
-}
-
 .game-pick {
   display: flex;
-  width: 100%;
   justify-content: space-between;
   align-items: center;
-  gap: 10px;
   padding: 12px 14px;
   font-size: 15px;
   color: var(--text);
@@ -303,7 +222,6 @@ select:focus {
   border-radius: 8px;
   cursor: pointer;
   text-align: left;
-  transition: border-color 0.15s ease, background 0.15s ease;
 }
 
 .game-pick:hover {
@@ -320,107 +238,8 @@ select:focus {
   cursor: default;
 }
 
-/* Non-clickable schedule rows (NFL, until its models land). */
-.game-pick.static {
-  cursor: default;
-}
-
-.game-pick.static:hover {
-  border-color: var(--border);
-}
-
-.game-pick-main {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
-}
-
 .game-teams {
   font-weight: 600;
-}
-
-.vs-sep {
-  color: var(--muted);
-  font-weight: 400;
-  font-size: 13px;
-}
-
-/* Little "🏆 World Cup" chip on match rows. */
-.stage-badge {
-  flex: none;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--accent);
-  background: rgba(240, 136, 62, 0.1);
-  border: 1px solid rgba(240, 136, 62, 0.35);
-  border-radius: 999px;
-  padding: 4px 9px;
-  white-space: nowrap;
-}
-
-/* ---- loading states ---- */
-.skeleton-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.skeleton-row {
-  height: 52px;
-  border-radius: 8px;
-  background: linear-gradient(
-    100deg,
-    var(--card-2) 40%,
-    #232b3a 50%,
-    var(--card-2) 60%
-  );
-  background-size: 200% 100%;
-  animation: shimmer 1.4s ease-in-out infinite;
-}
-
-@keyframes shimmer {
-  0% {
-    background-position: 120% 0;
-  }
-  100% {
-    background-position: -80% 0;
-  }
-}
-
-.crunching {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 12px;
-}
-
-.spinner {
-  width: 14px;
-  height: 14px;
-  flex: none;
-  border: 2px solid var(--border);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.nfl-note {
-  text-align: left;
-  margin: 0 0 14px;
-  padding: 10px 12px;
-  background: rgba(240, 136, 62, 0.06);
-  border: 1px solid rgba(240, 136, 62, 0.25);
-  border-radius: 8px;
-  color: var(--text);
 }
 
 .proj-num.game-score {
@@ -511,6 +330,15 @@ select:focus {
 /* Middle segment of the soccer three-way (win / draw / win) bar. */
 .conf-bar-fill.draw {
   background: #5a6473;
+}
+
+/* Sport switcher sits above the props/game tabs; slightly tighter. */
+.sport-tabs {
+  margin-top: 22px;
+}
+
+.sport-tabs + .tabs {
+  margin-top: 10px;
 }
 
 .recommendation {
