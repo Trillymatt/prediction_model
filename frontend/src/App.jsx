@@ -15,7 +15,104 @@ import {
   fetchRoster,
   fetchPlayerProjections,
   projectBatch,
+  fetchUpcomingNflGames,
+  searchNflPlayers,
 } from "./api.js";
+
+// ===========================================================================
+// World Cup helpers: flags, knockout-round labels, kickoff formatting
+// ===========================================================================
+// Country flags for the World Cup field: every 2026 finalist plus common
+// qualifier/friendly opponents. Unknown teams just render without a flag.
+const FLAGS = {
+  Algeria: "🇩🇿", Argentina: "🇦🇷", Australia: "🇦🇺", Austria: "🇦🇹",
+  Belgium: "🇧🇪", "Bosnia and Herzegovina": "🇧🇦", Brazil: "🇧🇷",
+  Canada: "🇨🇦", "Cape Verde": "🇨🇻", Colombia: "🇨🇴", Croatia: "🇭🇷",
+  "Curaçao": "🇨🇼", Czechia: "🇨🇿", "DR Congo": "🇨🇩", Ecuador: "🇪🇨",
+  Egypt: "🇪🇬", England: "🏴󠁧󠁢󠁥󠁮󠁧󠁿", France: "🇫🇷", Germany: "🇩🇪",
+  Ghana: "🇬🇭", Haiti: "🇭🇹", Iran: "🇮🇷", Iraq: "🇮🇶",
+  "Ivory Coast": "🇨🇮", Japan: "🇯🇵", Jordan: "🇯🇴", Mexico: "🇲🇽",
+  Morocco: "🇲🇦", Netherlands: "🇳🇱", "New Zealand": "🇳🇿", Norway: "🇳🇴",
+  Panama: "🇵🇦", Paraguay: "🇵🇾", Portugal: "🇵🇹", Qatar: "🇶🇦",
+  "Saudi Arabia": "🇸🇦", Scotland: "🏴󠁧󠁢󠁳󠁣󠁴󠁿", Senegal: "🇸🇳",
+  "South Africa": "🇿🇦", "South Korea": "🇰🇷", Spain: "🇪🇸", Sweden: "🇸🇪",
+  Switzerland: "🇨🇭", Tunisia: "🇹🇳", "Türkiye": "🇹🇷",
+  "United States": "🇺🇸", Uruguay: "🇺🇾", Uzbekistan: "🇺🇿",
+  Wales: "🏴󠁧󠁢󠁷󠁬󠁳󠁿", Ireland: "🇮🇪", Italy: "🇮🇹", Denmark: "🇩🇰",
+  Poland: "🇵🇱", Ukraine: "🇺🇦", Serbia: "🇷🇸", Slovakia: "🇸🇰",
+  Slovenia: "🇸🇮", Romania: "🇷🇴", Hungary: "🇭🇺", Greece: "🇬🇷",
+  Albania: "🇦🇱", Georgia: "🇬🇪", Nigeria: "🇳🇬", Cameroon: "🇨🇲",
+  Mali: "🇲🇱", "Burkina Faso": "🇧🇫", Gabon: "🇬🇦", Chile: "🇨🇱",
+  Peru: "🇵🇪", Venezuela: "🇻🇪", Bolivia: "🇧🇴", "Costa Rica": "🇨🇷",
+  Honduras: "🇭🇳", Jamaica: "🇯🇲", "United Arab Emirates": "🇦🇪",
+};
+
+const withFlag = (team) => (FLAGS[team] ? `${FLAGS[team]} ${team}` : team);
+
+// The schedule feed doesn't carry the round, but the WC 2026 calendar is
+// fixed — label each match's stage from its date. Empty for non-WC dates.
+function wcStage(dateStr) {
+  const d = (dateStr || "").slice(0, 10);
+  if (d < "2026-06-11" || d > "2026-07-19") return "";
+  if (d <= "2026-06-27") return "Group Stage";
+  if (d <= "2026-07-03") return "Round of 32";
+  if (d <= "2026-07-08") return "Round of 16";
+  if (d <= "2026-07-12") return "Quarter-final";
+  if (d <= "2026-07-16") return "Semi-final";
+  if (d === "2026-07-18") return "Third Place";
+  return "Final";
+}
+
+const isWorldCup = (competition) =>
+  (competition || "").toLowerCase().includes("world cup");
+
+// "20:00" (Eastern, from the schedule) -> "8:00 PM ET"
+function fmtKickoff(hhmm) {
+  if (!hhmm) return "";
+  const [h, m] = String(hhmm).split(":").map(Number);
+  if (isNaN(h) || isNaN(m)) return "";
+  return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"} ET`;
+}
+
+// "2026-07-04" -> "Today · Sat, Jul 4" / "Tomorrow · …" / "Sat, Jul 4"
+function dayLabel(dateStr) {
+  if (!dateStr) return "Date TBD";
+  const [y, mo, da] = dateStr.slice(0, 10).split("-").map(Number);
+  const d = new Date(y, mo - 1, da);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const diff = Math.round((d - today) / 86400000);
+  const nice = d.toLocaleDateString("en-US", {
+    weekday: "short", month: "short", day: "numeric",
+  });
+  if (diff === 0) return `Today · ${nice}`;
+  if (diff === 1) return `Tomorrow · ${nice}`;
+  return nice;
+}
+
+// Consecutive games that share a date -> one group per day, order preserved.
+function groupByDate(games, dateKey) {
+  const out = [];
+  for (const g of games) {
+    const d = (g[dateKey] || "").slice(0, 10);
+    if (!out.length || out[out.length - 1].date !== d) {
+      out.push({ date: d, games: [] });
+    }
+    out[out.length - 1].games.push(g);
+  }
+  return out;
+}
+
+// Shimmering placeholder rows shown while a list loads.
+function Skeleton({ rows = 4 }) {
+  return (
+    <div className="skeleton-list">
+      {Array.from({ length: rows }, (_, i) => (
+        <div className="skeleton-row" key={i} />
+      ))}
+    </div>
+  );
+}
 
 // Friendly labels for the stat dropdown.
 const STAT_LABELS = {
@@ -392,6 +489,8 @@ function RosterPlayerRow({ p, opponent, addProp, sport = "nba" }) {
   const stat =
     sport === "soccer"
       ? { val: p.ga_per90 != null ? `${p.ga_per90}` : "–", note: "G+A/90 · tap" }
+      : sport === "nfl"
+      ? { val: p.position || "–", note: "tap for info" }
       : { val: p.ppg != null ? `${p.ppg}` : "–", note: p.ppg != null ? "ppg · tap" : "tap for props" };
 
   return (
@@ -413,7 +512,16 @@ function RosterPlayerRow({ p, opponent, addProp, sport = "nba" }) {
           <span className="pick-prob">{stat.note}</span>
         </span>
       </button>
-      {open && (
+      {open && sport === "nfl" && (
+        <div className="pick-detail">
+          <div className="note nfl-note">
+            {p.player_name} · {p.team}
+            {p.position ? ` · ${p.position}` : ""}. Player props aren't live
+            yet for the NFL — check back once the projection model lands.
+          </div>
+        </div>
+      )}
+      {open && sport !== "nfl" && (
         <div className="pick-detail">
           <PlayerProjections
             player={player}
@@ -435,9 +543,14 @@ function RosterView({ roster, addProp, sport = "nba" }) {
     <div className="card picks">
       <div className="picks-head">
         <label>
-          👥 Players · {roster.away_team} {sep} {roster.home_team}
+          👥 Players ·{" "}
+          {sport === "soccer"
+            ? `${withFlag(roster.away_team)} ${sep} ${withFlag(roster.home_team)}`
+            : `${roster.away_team} ${sep} ${roster.home_team}`}
         </label>
-        <span className="muted">tap any player for the model's read</span>
+        <span className="muted">
+          {sport === "nfl" ? "roster directory" : "tap any player for the model's read"}
+        </span>
       </div>
       {roster.teams.map((t) => (
         <div className="roster-team" key={t.abbr}>
@@ -1002,10 +1115,11 @@ function DailyPicks({ sport }) {
         <span className="muted">the model's most confident calls today</span>
       </div>
 
-      {!data && <div className="muted">Loading…</div>}
+      {!data && <Skeleton rows={4} />}
       {data?.status === "building" && (
-        <div className="muted">
-          Building today's board — the first load of the day takes a minute…
+        <div className="muted crunching">
+          <span className="spinner" /> Building today's board — the first load
+          of the day takes a minute…
         </div>
       )}
       {data?.note && <div className="muted picks-note">{data.note}</div>}
@@ -1072,10 +1186,11 @@ function GameBoard({ sport }) {
       </div>
 
       {error && <div className="muted">Board unavailable: {error}</div>}
-      {!data && !error && <div className="muted">Loading…</div>}
+      {!data && !error && <Skeleton rows={5} />}
       {data?.status === "building" && (
-        <div className="muted">
-          Building today's board — the first load of the day takes a minute…
+        <div className="muted crunching">
+          <span className="spinner" /> Building today's board — the first load
+          of the day takes a minute…
         </div>
       )}
       {data?.note && <div className="muted picks-note">{data.note}</div>}
@@ -1101,12 +1216,18 @@ function GameBoard({ sport }) {
                 <span className="pick-left">
                   <span className="pick-name">
                     {sport === "soccer"
-                      ? `${g.home_team} vs ${g.away_team}`
+                      ? `${withFlag(g.home_team)} vs ${withFlag(g.away_team)}`
                       : `${g.away_team} @ ${g.home_team}`}
                   </span>
                   <span className="muted">
-                    {g.game_date}
-                    {g.competition ? ` · ${g.competition}` : ""}
+                    {dayLabel(g.game_date)}
+                    {sport === "soccer" &&
+                    isWorldCup(g.competition) &&
+                    wcStage(g.game_date)
+                      ? ` · ${wcStage(g.game_date)} · World Cup`
+                      : g.competition
+                      ? ` · ${g.competition}`
+                      : ""}
                   </span>
                 </span>
                 {o && (
@@ -1145,7 +1266,7 @@ function GameBoard({ sport }) {
 }
 
 function GameView({ addProp }) {
-  const [games, setGames] = useState([]);
+  const [games, setGames] = useState(null);
   const [selected, setSelected] = useState(null);
   const [result, setResult] = useState(null);
   const [roster, setRoster] = useState(null);
@@ -1189,26 +1310,40 @@ function GameView({ addProp }) {
       <div className="card controls">
         <div className="field">
           <label>Upcoming games</label>
-          {games.length === 0 && (
-            <div className="muted">No upcoming games found in the schedule.</div>
+          {games === null && <Skeleton rows={5} />}
+          {games !== null && games.length === 0 && (
+            <div className="muted">
+              No upcoming games found in the schedule — the NBA is in its
+              offseason right now. Check the ⚽ World Cup tab for live action.
+            </div>
           )}
           <div className="game-list">
-            {games.map((g) => (
-              <button
-                key={g.game_id}
-                className={`game-pick ${selected === g.game_id ? "active" : ""}`}
-                onClick={() => run(g)}
-                disabled={loading}
-              >
-                <span className="game-teams">
-                  {g.away_team} @ {g.home_team}
-                </span>
-                <span className="muted">{g.game_date}</span>
-              </button>
+            {groupByDate(games || [], "game_date").map((day) => (
+              <div className="game-day" key={day.date}>
+                <div className="game-day-head">{dayLabel(day.date)}</div>
+                {day.games.map((g) => (
+                  <button
+                    key={g.game_id}
+                    className={`game-pick ${
+                      selected === g.game_id ? "active" : ""
+                    }`}
+                    onClick={() => run(g)}
+                    disabled={loading}
+                  >
+                    <span className="game-teams">
+                      {g.away_team} @ {g.home_team}
+                    </span>
+                  </button>
+                ))}
+              </div>
             ))}
           </div>
         </div>
-        {loading && <div className="muted">Crunching…</div>}
+        {loading && (
+          <div className="muted crunching">
+            <span className="spinner" /> Running the game model…
+          </div>
+        )}
         {error && <div className="error">{error}</div>}
       </div>
 
@@ -1381,11 +1516,15 @@ function SoccerGameCard({ r, collapseWhy }) {
       <div className="result-head">
         <div>
           <h2>
-            {r.home_team} vs {r.away_team}
+            {withFlag(r.home_team)} vs {withFlag(r.away_team)}
           </h2>
           <div className="muted">
-            {r.match_date}
-            {r.group ? ` · Group ${r.group}` : ""} · {r.competition}
+            {dayLabel(r.match_date)}
+            {r.group ? ` · Group ${r.group}` : ""}
+            {isWorldCup(r.competition) && wcStage(r.match_date)
+              ? ` · ${wcStage(r.match_date)}`
+              : ""}{" "}
+            · {r.competition}
           </div>
         </div>
         <span className="badge model">poisson · elo</span>
@@ -1447,7 +1586,7 @@ function SoccerGameCard({ r, collapseWhy }) {
 }
 
 function SoccerGameView({ addProp }) {
-  const [games, setGames] = useState([]);
+  const [games, setGames] = useState(null);
   const [selected, setSelected] = useState(null);
   const [result, setResult] = useState(null);
   const [roster, setRoster] = useState(null);
@@ -1491,32 +1630,59 @@ function SoccerGameView({ addProp }) {
       <div className="card controls">
         <div className="field">
           <label>Upcoming matches</label>
-          {games.length === 0 && (
+          {games === null && <Skeleton rows={5} />}
+          {games !== null && games.length === 0 && (
             <div className="muted">
               No upcoming matches found — run 20_soccer_schedule.py to load
               the schedule.
             </div>
           )}
           <div className="game-list">
-            {games.map((g) => (
-              <button
-                key={g.match_id}
-                className={`game-pick ${selected === g.match_id ? "active" : ""}`}
-                onClick={() => run(g)}
-                disabled={loading}
-              >
-                <span className="game-teams">
-                  {g.home_team} vs {g.away_team}
-                </span>
-                <span className="muted">
-                  {g.match_date}
-                  {g.competition === "FIFA World Cup" ? " · World Cup" : ""}
-                </span>
-              </button>
+            {groupByDate(games || [], "match_date").map((day) => (
+              <div className="game-day" key={day.date}>
+                <div className="game-day-head">
+                  {dayLabel(day.date)}
+                  {isWorldCup(day.games[0]?.competition) &&
+                    wcStage(day.date) && (
+                      <span className="stage-label">{wcStage(day.date)}</span>
+                    )}
+                </div>
+                {day.games.map((g) => (
+                  <button
+                    key={g.match_id}
+                    className={`game-pick ${
+                      selected === g.match_id ? "active" : ""
+                    }`}
+                    onClick={() => run(g)}
+                    disabled={loading}
+                  >
+                    <span className="game-pick-main">
+                      <span className="game-teams">
+                        {withFlag(g.home_team)}
+                        <span className="vs-sep"> vs </span>
+                        {withFlag(g.away_team)}
+                      </span>
+                      <span className="muted">
+                        {fmtKickoff(g.match_time) || "Kickoff TBD"}
+                        {!isWorldCup(g.competition) && g.competition
+                          ? ` · ${g.competition}`
+                          : ""}
+                      </span>
+                    </span>
+                    {isWorldCup(g.competition) && (
+                      <span className="stage-badge">🏆 World Cup</span>
+                    )}
+                  </button>
+                ))}
+              </div>
             ))}
           </div>
         </div>
-        {loading && <div className="muted">Crunching…</div>}
+        {loading && (
+          <div className="muted crunching">
+            <span className="spinner" /> Running the match model…
+          </div>
+        )}
         {error && <div className="error">{error}</div>}
       </div>
 
@@ -1637,6 +1803,145 @@ function SoccerPropsView({ addProp }) {
       )}
 
       <DailyPicks sport="soccer" />
+    </>
+  );
+}
+
+// ===========================================================================
+// NFL — schedule now, projections as the pipeline lands (see NFL_SETUP.md)
+// ===========================================================================
+// Search any player in the roster directory; shows team/position since
+// there's no projection engine yet (that's the next NFL pipeline stage).
+function NflPlayerLookup() {
+  const [player, setPlayer] = useState(null);
+
+  return (
+    <div className="card controls">
+      <div className="picks-head">
+        <label>🔎 Player lookup</label>
+        <span className="muted">roster directory</span>
+      </div>
+      <PlayerSearch
+        selected={player}
+        onSelect={setPlayer}
+        searchFn={searchNflPlayers}
+        sport="nfl"
+      />
+      {player && (
+        <div className="note nfl-note">
+          {player.player_name}
+          {player.team ? ` · ${player.team}` : ""}
+          {player.position ? ` · ${player.position}` : ""}. Props and
+          projections aren't live yet for the NFL — check back once the
+          model lands.
+        </div>
+      )}
+    </div>
+  );
+}
+
+function NflView() {
+  const [games, setGames] = useState(null);
+  const [error, setError] = useState("");
+  const [selected, setSelected] = useState(null);
+  const [roster, setRoster] = useState(null);
+  const [rosterError, setRosterError] = useState("");
+  const [rosterLoading, setRosterLoading] = useState(false);
+
+  useEffect(() => {
+    fetchUpcomingNflGames(60)
+      .then(setGames)
+      .catch((e) => {
+        setGames([]);
+        setError(e.message);
+      });
+  }, []);
+
+  const weekLabel = (g) => {
+    const type =
+      g.season_type === "preseason"
+        ? "Preseason"
+        : g.season_type === "playoffs"
+        ? "Playoffs"
+        : "";
+    return [type, g.week != null ? `Week ${g.week}` : ""]
+      .filter(Boolean)
+      .join(" · ");
+  };
+
+  const openRoster = (g) => {
+    setSelected(g.game_id);
+    setRoster(null);
+    setRosterError("");
+    setRosterLoading(true);
+    fetchRoster({ home: g.home_team, away: g.away_team, sport: "nfl" })
+      .then(setRoster)
+      .catch((e) => setRosterError(e.message))
+      .finally(() => setRosterLoading(false));
+  };
+
+  return (
+    <>
+      <div className="card controls">
+        <div className="picks-head">
+          <label>🏈 Upcoming games</label>
+          <span className="muted">2026 season</span>
+        </div>
+        <div className="note nfl-note">
+          NFL is new here — the schedule and rosters are live, and game
+          predictions + player props are in the works. Tap a game to see
+          both rosters.
+        </div>
+        {games === null && <Skeleton rows={5} />}
+        {error && <div className="muted">Schedule unavailable: {error}</div>}
+        {games !== null && !error && games.length === 0 && (
+          <div className="muted">
+            No NFL games in the next 60 days — the season kicks off in
+            September. The slate will appear here as it gets close.
+          </div>
+        )}
+        <div className="game-list">
+          {groupByDate(games || [], "game_date").map((day) => (
+            <div className="game-day" key={day.date}>
+              <div className="game-day-head">
+                {dayLabel(day.date)}
+                {weekLabel(day.games[0]) && (
+                  <span className="stage-label">{weekLabel(day.games[0])}</span>
+                )}
+              </div>
+              {day.games.map((g) => (
+                <button
+                  key={g.game_id}
+                  className={`game-pick ${selected === g.game_id ? "active" : ""}`}
+                  onClick={() => openRoster(g)}
+                >
+                  <span className="game-pick-main">
+                    <span className="game-teams">
+                      {g.away_team} <span className="vs-sep">@</span>{" "}
+                      {g.home_team}
+                    </span>
+                    <span className="muted">
+                      {fmtKickoff(g.game_time) || "Kickoff TBD"}
+                    </span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+        {rosterLoading && (
+          <div className="muted crunching">
+            <span className="spinner" /> Loading rosters…
+          </div>
+        )}
+        {rosterError && (
+          <div className="muted">Rosters unavailable: {rosterError}</div>
+        )}
+      </div>
+
+      {roster && <RosterView roster={roster} sport="nfl" />}
+
+      <NflPlayerLookup />
     </>
   );
 }
@@ -1852,8 +2157,10 @@ function SlipAnalyzer() {
 }
 
 export default function App() {
-  const [sport, setSport] = useState("nba");
-  const [mode, setMode] = useState("props");
+  // The World Cup is live right now (knockout rounds) and the NBA is in its
+  // offseason, so soccer leads.
+  const [sport, setSport] = useState("soccer");
+  const [mode, setMode] = useState("game");
   const [stats, setStats] = useState([]);
   const [player, setPlayer] = useState(null);
   const [stat, setStat] = useState("points");
@@ -1922,64 +2229,73 @@ export default function App() {
         </p>
       </header>
 
-      <div className="tabs sport-tabs">
-        <button
-          className={sport === "nba" ? "tab active" : "tab"}
-          onClick={() => setSport("nba")}
-        >
-          🏀 NBA
-        </button>
-        <button
-          className={sport === "soccer" ? "tab active" : "tab"}
-          onClick={() => setSport("soccer")}
-        >
-          ⚽ World Cup
-        </button>
-        <button
-          className={sport === "slip" ? "tab active" : "tab"}
-          onClick={() => setSport("slip")}
-        >
-          📸 Scan Slip
-        </button>
-      </div>
+      <nav className="topnav">
+        <div className="tabs sport-tabs">
+          <button
+            className={sport === "soccer" ? "tab active" : "tab"}
+            onClick={() => setSport("soccer")}
+          >
+            ⚽ World Cup
+          </button>
+          <button
+            className={sport === "nba" ? "tab active" : "tab"}
+            onClick={() => setSport("nba")}
+          >
+            🏀 NBA
+          </button>
+          <button
+            className={sport === "nfl" ? "tab active" : "tab"}
+            onClick={() => setSport("nfl")}
+          >
+            🏈 NFL
+          </button>
+          <button
+            className={sport === "slip" ? "tab active" : "tab"}
+            onClick={() => setSport("slip")}
+          >
+            📸 Scan Slip
+          </button>
+        </div>
+
+        {sport !== "slip" && sport !== "nfl" && (
+          <div className="tabs mode-tabs">
+            <button
+              className={mode === "game" ? "tab active" : "tab"}
+              onClick={() => setMode("game")}
+            >
+              {sport === "soccer" ? "Match Outcome" : "Game Outcome"}
+            </button>
+            <button
+              className={mode === "props" ? "tab active" : "tab"}
+              onClick={() => setMode("props")}
+            >
+              Player Props
+            </button>
+            <button
+              className={mode === "multi" ? "tab active" : "tab"}
+              onClick={() => setMode("multi")}
+            >
+              Multi-Prop
+              {slip.filter((p) => p.sport === sport).length > 0
+                ? ` (${slip.filter((p) => p.sport === sport).length})`
+                : ""}
+            </button>
+            <button
+              className={mode === "bets" ? "tab active" : "tab"}
+              onClick={() => setMode("bets")}
+            >
+              Best Bets
+            </button>
+          </div>
+        )}
+      </nav>
 
       {sport === "slip" && <SlipAnalyzer />}
+      {sport === "nfl" && <NflView />}
 
-      {sport !== "slip" && (
-      <div className="tabs">
-        <button
-          className={mode === "props" ? "tab active" : "tab"}
-          onClick={() => setMode("props")}
-        >
-          Player Props
-        </button>
-        <button
-          className={mode === "game" ? "tab active" : "tab"}
-          onClick={() => setMode("game")}
-        >
-          {sport === "soccer" ? "Match Outcome" : "Game Outcome"}
-        </button>
-        {sport !== "slip" && (
-          <button
-            className={mode === "multi" ? "tab active" : "tab"}
-            onClick={() => setMode("multi")}
-          >
-            Multi-Prop
-            {slip.filter((p) => p.sport === sport).length > 0
-              ? ` (${slip.filter((p) => p.sport === sport).length})`
-              : ""}
-          </button>
-        )}
-        <button
-          className={mode === "bets" ? "tab active" : "tab"}
-          onClick={() => setMode("bets")}
-        >
-          Best Bets
-        </button>
-      </div>
+      {sport !== "slip" && sport !== "nfl" && mode === "bets" && (
+        <GameBoard sport={sport} />
       )}
-
-      {sport !== "slip" && mode === "bets" && <GameBoard sport={sport} />}
 
       {sport === "soccer" && mode === "game" && (
         <SoccerGameView addProp={addProp} />
