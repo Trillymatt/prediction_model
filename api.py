@@ -26,9 +26,6 @@ Soccer (World Cup) -- same shapes, three-way outcomes:
   GET /api/soccer/games?days=           upcoming matches (WC first)
   GET /api/soccer/game?home=&away=      match outcome: win/draw/win + goals
 
-NFL (schedule only for now -- engines are being built, see NFL_SETUP.md):
-  GET /api/nfl/games?days=              upcoming games
-
 Setup:
     pip install -r requirements.txt
     # needs the same .env (SUPABASE_URL / SUPABASE_KEY) as the scripts
@@ -91,15 +88,6 @@ try:
 except Exception as exc:  # noqa: BLE001 - soccer must never break NBA
     soccer_engine = soccer_game_engine = None
     _soccer_load_error = str(exc)
-
-# NFL (schedule stage). Loaded defensively like soccer: a missing table or
-# bad credentials must never break the NBA/soccer apps.
-try:
-    import nfl_common
-    _nfl_load_error = None
-except (Exception, SystemExit) as exc:  # noqa: BLE001 - NFL must never break the others
-    nfl_common = None
-    _nfl_load_error = str(exc)
 
 # Daily "My Picks" boards (computed in the background, cached per day).
 import daily_picks
@@ -419,25 +407,6 @@ def soccer_game(
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:  # noqa: BLE001 - tables missing / RLS / network
         raise _soccer_data_error(exc)
-
-
-# --- NFL (schedule stage -- projections come with the later pipeline stages) --
-@app.get("/api/nfl/games")
-def nfl_games(days: int = Query(30, ge=1, le=250)):
-    """Upcoming NFL games in the next `days` days (soonest first)."""
-    if nfl_common is None:
-        raise HTTPException(
-            status_code=503,
-            detail=f"NFL side unavailable: {_nfl_load_error}",
-        )
-    try:
-        return {"games": nfl_common.upcoming_games(days=days)}
-    except Exception as exc:  # noqa: BLE001 - table missing / RLS / network
-        raise HTTPException(
-            status_code=503,
-            detail=f"NFL data unavailable ({exc}). If this is a fresh setup, "
-                   f"run the SQL + schedule load in NFL_SETUP.md.",
-        )
 
 
 # --- Bet-slip analyzer -------------------------------------------------------
