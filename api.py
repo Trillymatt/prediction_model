@@ -26,6 +26,12 @@ Soccer (World Cup) -- same shapes, three-way outcomes:
   GET /api/soccer/games?days=           upcoming matches (WC first)
   GET /api/soccer/game?home=&away=      match outcome: win/draw/win + goals
 
+NFL (schedule + roster directory for now -- projections are being built, see
+NFL_SETUP.md):
+  GET /api/nfl/games?days=              upcoming games
+  GET /api/nfl/players?q=<text>         player autocomplete
+  GET /api/nfl/roster?home=&away=       both rosters for a matchup
+
 Setup:
     pip install -r requirements.txt
     # needs the same .env (SUPABASE_URL / SUPABASE_KEY) as the scripts
@@ -88,6 +94,15 @@ try:
 except Exception as exc:  # noqa: BLE001 - soccer must never break NBA
     soccer_engine = soccer_game_engine = None
     _soccer_load_error = str(exc)
+
+# NFL (schedule stage). Loaded defensively like soccer: a missing table or
+# bad credentials must never break the NBA/soccer apps.
+try:
+    import nfl_common
+    _nfl_load_error = None
+except (Exception, SystemExit) as exc:  # noqa: BLE001 - NFL must never break the others
+    nfl_common = None
+    _nfl_load_error = str(exc)
 
 # Daily "My Picks" boards (computed in the background, cached per day).
 import daily_picks
@@ -407,6 +422,62 @@ def soccer_game(
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:  # noqa: BLE001 - tables missing / RLS / network
         raise _soccer_data_error(exc)
+
+
+# --- NFL (schedule stage -- projections come with the later pipeline stages) --
+def _require_nfl():
+    if nfl_common is None:
+        raise HTTPException(
+            status_code=503,
+            detail=f"NFL side unavailable: {_nfl_load_error}",
+        )
+
+
+def _nfl_data_error(exc: Exception) -> HTTPException:
+    return HTTPException(
+        status_code=503,
+        detail=f"NFL data unavailable ({exc}). If this is a fresh setup, run "
+               f"the SQL + schedule/roster load in NFL_SETUP.md.",
+    )
+
+
+@app.get("/api/nfl/games")
+def nfl_games(days: int = Query(30, ge=1, le=250)):
+    """Upcoming NFL games in the next `days` days (soonest first)."""
+    _require_nfl()
+    try:
+        return {"games": nfl_common.upcoming_games(days=days)}
+    except Exception as exc:  # noqa: BLE001 - table missing / RLS / network
+        raise _nfl_data_error(exc)
+
+
+@app.get("/api/nfl/players")
+def nfl_players(q: str = Query("", description="name fragment"),
+                 limit: int = Query(10, ge=1, le=25)):
+    """Player autocomplete against nfl_players (roster directory; no stats
+    yet -- see NFL_SETUP.md)."""
+    _require_nfl()
+    try:
+        return {"players": nfl_common.search_players(q, limit=limit)}
+    except Exception as exc:  # noqa: BLE001 - table missing / RLS / network
+        raise _nfl_data_error(exc)
+
+
+@app.get("/api/nfl/roster")
+def nfl_roster(
+    home: str = Query(..., description="home team, e.g. Kansas City Chiefs or KC"),
+    away: str = Query(..., description="away team, e.g. Buffalo Bills or BUF"),
+):
+    """Both teams' rosters for a matchup, offense -> defense -> specialists.
+    No per-player stats yet (that's the next pipeline stage) -- tapping a
+    player is a placeholder in the frontend until then."""
+    _require_nfl()
+    try:
+        return nfl_common.roster_for_game(home, away)
+    except (LookupError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:  # noqa: BLE001 - table missing / RLS / network
+        raise _nfl_data_error(exc)
 
 
 # --- Bet-slip analyzer -------------------------------------------------------
