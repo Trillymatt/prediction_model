@@ -51,6 +51,14 @@ create table if not exists nfl_players (
 If RLS is enabled on your project, allow the service key to read/write both
 tables the same way your other tables do.
 
+If `nfl_schedule` was created before `season_type` was added to this doc,
+add it (the puller writes it on every upsert, so an older table will fail
+with `PGRST204: Could not find the 'season_type' column`):
+
+```sql
+alter table nfl_schedule add column if not exists season_type text;
+```
+
 ## 2. Load the schedule + rosters
 
 ```bash
