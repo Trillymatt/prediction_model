@@ -245,6 +245,88 @@ select:focus {
   border-radius: 8px;
 }
 
+/* Sport tabs + the gear that manages which sports show. */
+.sport-tabs-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sport-tabs-row .sport-tabs {
+  flex: 1;
+  min-width: 0;
+}
+
+.sport-settings {
+  position: relative;
+  flex: none;
+}
+
+.sport-settings-btn {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 17px;
+  color: var(--muted);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.sport-settings-btn:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.sport-settings-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
+  width: 200px;
+  padding: 12px;
+  background: var(--card-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+}
+
+.sport-settings-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.sport-settings-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 2px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.sport-settings-row input {
+  accent-color: var(--accent);
+  width: 15px;
+  height: 15px;
+}
+
+.sport-settings-hint {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
 /* ---- game outcome view ---- */
 .game-list {
   display: flex;

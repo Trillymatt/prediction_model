@@ -155,6 +155,50 @@ function sortStats(stats) {
   });
 }
 
+// ===========================================================================
+// Sport visibility: manually hide a sport that's out of season instead of
+// scrolling past a dead tab every time. Persisted in localStorage; "Scan
+// Slip" is a tool, not a sport, so it's always shown and can't be hidden.
+// ===========================================================================
+const ALL_SPORTS = [
+  { key: "soccer", icon: "⚽", label: "World Cup" },
+  { key: "nba", icon: "🏀", label: "NBA" },
+  { key: "nfl", icon: "🏈", label: "NFL" },
+];
+const HIDDEN_SPORTS_KEY = "mfab_hidden_sports";
+
+function useHiddenSports() {
+  const read = () => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(HIDDEN_SPORTS_KEY)) || [];
+      // Never let every sport end up hidden (e.g. stale data from a future
+      // version with more sports) -- always leave at least one visible.
+      return saved.length >= ALL_SPORTS.length ? [] : saved;
+    } catch {
+      return [];
+    }
+  };
+  const [hidden, setHidden] = useState(read);
+
+  const toggle = (key) => {
+    setHidden((prev) => {
+      const isHidden = prev.includes(key);
+      // Don't allow hiding the last visible sport -- there'd be nothing to
+      // switch to.
+      if (!isHidden && prev.length >= ALL_SPORTS.length - 1) return prev;
+      const next = isHidden ? prev.filter((k) => k !== key) : [...prev, key];
+      try {
+        localStorage.setItem(HIDDEN_SPORTS_KEY, JSON.stringify(next));
+      } catch {
+        /* storage full / disabled -- the toggle just won't persist */
+      }
+      return next;
+    });
+  };
+
+  return { hidden, toggle };
+}
+
 // Remembers the players you've searched (per sport, in localStorage) so you can
 // jump back to them with one tap instead of retyping. Shared across every
 // PlayerSearch on the page — selecting a player anywhere updates the list
@@ -2156,11 +2200,62 @@ function SlipAnalyzer() {
   );
 }
 
+// Small popover, opened from a gear icon next to the sport tabs, for manually
+// showing/hiding out-of-season sports. Closes on outside click.
+function SportSettings({ hidden, toggle }) {
+  const [open, setOpen] = useState(false);
+  const boxRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => {
+      if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  return (
+    <div className="sport-settings" ref={boxRef}>
+      <button
+        type="button"
+        className="sport-settings-btn"
+        aria-label="Show/hide sports"
+        onClick={() => setOpen(!open)}
+      >
+        ⚙
+      </button>
+      {open && (
+        <div className="sport-settings-panel">
+          <div className="sport-settings-title">Show sports</div>
+          {ALL_SPORTS.map((s) => (
+            <label className="sport-settings-row" key={s.key}>
+              <input
+                type="checkbox"
+                checked={!hidden.includes(s.key)}
+                onChange={() => toggle(s.key)}
+              />
+              <span>
+                {s.icon} {s.label}
+              </span>
+            </label>
+          ))}
+          <div className="sport-settings-hint">
+            Out of season? Hide it — you can bring it back here anytime.
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function App() {
   // The World Cup is live right now (knockout rounds) and the NBA is in its
   // offseason, so soccer leads.
   const [sport, setSport] = useState("soccer");
   const [mode, setMode] = useState("game");
+  const { hidden: hiddenSports, toggle: toggleSportHidden } = useHiddenSports();
+  const visibleSports = ALL_SPORTS.filter((s) => !hiddenSports.includes(s.key));
   const [stats, setStats] = useState([]);
   const [player, setPlayer] = useState(null);
   const [stat, setStat] = useState("points");
@@ -2194,6 +2289,16 @@ export default function App() {
   useEffect(() => {
     fetchStats().then((s) => setStats(sortStats(s))).catch(() => {});
   }, []);
+
+  // If the active sport gets hidden (including on first load, e.g. someone
+  // hid soccer last visit), jump to the first sport still showing. Scan Slip
+  // is never hidden, so there's always somewhere to land.
+  useEffect(() => {
+    if (sport !== "slip" && hiddenSports.includes(sport)) {
+      setSport(visibleSports[0]?.key || "slip");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hiddenSports]);
 
   const run = async () => {
     if (!player) {
@@ -2230,31 +2335,25 @@ export default function App() {
       </header>
 
       <nav className="topnav">
-        <div className="tabs sport-tabs">
-          <button
-            className={sport === "soccer" ? "tab active" : "tab"}
-            onClick={() => setSport("soccer")}
-          >
-            ⚽ World Cup
-          </button>
-          <button
-            className={sport === "nba" ? "tab active" : "tab"}
-            onClick={() => setSport("nba")}
-          >
-            🏀 NBA
-          </button>
-          <button
-            className={sport === "nfl" ? "tab active" : "tab"}
-            onClick={() => setSport("nfl")}
-          >
-            🏈 NFL
-          </button>
-          <button
-            className={sport === "slip" ? "tab active" : "tab"}
-            onClick={() => setSport("slip")}
-          >
-            📸 Scan Slip
-          </button>
+        <div className="sport-tabs-row">
+          <div className="tabs sport-tabs">
+            {visibleSports.map((s) => (
+              <button
+                key={s.key}
+                className={sport === s.key ? "tab active" : "tab"}
+                onClick={() => setSport(s.key)}
+              >
+                {s.icon} {s.label}
+              </button>
+            ))}
+            <button
+              className={sport === "slip" ? "tab active" : "tab"}
+              onClick={() => setSport("slip")}
+            >
+              📸 Scan Slip
+            </button>
+          </div>
+          <SportSettings hidden={hiddenSports} toggle={toggleSportHidden} />
         </div>
 
         {sport !== "slip" && sport !== "nfl" && (
