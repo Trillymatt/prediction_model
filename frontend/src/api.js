@@ -90,7 +90,7 @@ export function projectBatch(props, sport = "nba") {
   });
 }
 
-// ---- NFL (schedule + roster directory; projections land with the pipeline) -
+// ---- NFL (schedule + roster + game-outcome model; props land later) -------
 
 export function fetchUpcomingNflGames(days = 30) {
   return getJSON(`/api/nfl/games?days=${days}`).then((d) => d.games);
@@ -100,6 +100,13 @@ export function searchNflPlayers(q) {
   return getJSON(`/api/nfl/players?q=${encodeURIComponent(q)}`).then(
     (d) => d.players
   );
+}
+
+export function projectNflGame({ home, away, date, gameId }) {
+  const params = new URLSearchParams({ home, away });
+  if (date) params.set("date", date);
+  if (gameId) params.set("game_id", gameId);
+  return getJSON(`/api/nfl/game?${params.toString()}`);
 }
 
 // ---- Bet-slip analyzer -----------------------------------------------------

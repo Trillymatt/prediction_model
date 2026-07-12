@@ -17,6 +17,7 @@ import {
   projectBatch,
   fetchUpcomingNflGames,
   searchNflPlayers,
+  projectNflGame,
 } from "./api.js";
 
 // ===========================================================================
@@ -924,7 +925,7 @@ function WinProbBar({ r }) {
 
 // `collapseWhy` hides the factor list behind an "Explanation" toggle — used on
 // the per-game board where the card sits inside an already-expanded game.
-function GameResultCard({ r, collapseWhy }) {
+function GameResultCard({ r, collapseWhy, badgeLabel = "trained model" }) {
   const recClass =
     r.confidence_label === "STRONG"
       ? "strong"
@@ -943,7 +944,7 @@ function GameResultCard({ r, collapseWhy }) {
             {r.game_date} · {r.season_type}
           </div>
         </div>
-        <span className="badge model">trained model</span>
+        <span className="badge model">{badgeLabel}</span>
       </div>
 
       <div className="proj">
@@ -1844,9 +1845,10 @@ function NflView() {
   const [games, setGames] = useState(null);
   const [error, setError] = useState("");
   const [selected, setSelected] = useState(null);
+  const [result, setResult] = useState(null);
+  const [resultError, setResultError] = useState("");
   const [roster, setRoster] = useState(null);
-  const [rosterError, setRosterError] = useState("");
-  const [rosterLoading, setRosterLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     fetchUpcomingNflGames(60)
@@ -1869,15 +1871,20 @@ function NflView() {
       .join(" · ");
   };
 
-  const openRoster = (g) => {
+  const run = (g) => {
     setSelected(g.game_id);
+    setResult(null);
+    setResultError("");
     setRoster(null);
-    setRosterError("");
-    setRosterLoading(true);
+    setLoading(true);
+    // Roster loads alongside the outcome, same as the NBA/soccer game views.
     fetchRoster({ home: g.home_team, away: g.away_team, sport: "nfl" })
       .then(setRoster)
-      .catch((e) => setRosterError(e.message))
-      .finally(() => setRosterLoading(false));
+      .catch(() => setRoster(null));
+    projectNflGame({ home: g.home_team, away: g.away_team, date: g.game_date, gameId: g.game_id })
+      .then(setResult)
+      .catch((e) => setResultError(e.message))
+      .finally(() => setLoading(false));
   };
 
   return (
@@ -1888,9 +1895,9 @@ function NflView() {
           <span className="muted">2026 season</span>
         </div>
         <div className="note nfl-note">
-          NFL is new here — the schedule and rosters are live, and game
-          predictions + player props are in the works. Tap a game to see
-          both rosters.
+          Game predictions use an Elo + points model — no trained ML model
+          yet (that needs a season or two of ingested box scores). Player
+          props are still in the works. Tap a game for the call.
         </div>
         {games === null && <Skeleton rows={5} />}
         {error && <div className="muted">Schedule unavailable: {error}</div>}
@@ -1913,7 +1920,8 @@ function NflView() {
                 <button
                   key={g.game_id}
                   className={`game-pick ${selected === g.game_id ? "active" : ""}`}
-                  onClick={() => openRoster(g)}
+                  onClick={() => run(g)}
+                  disabled={loading}
                 >
                   <span className="game-pick-main">
                     <span className="game-teams">
@@ -1929,17 +1937,23 @@ function NflView() {
             </div>
           ))}
         </div>
-        {rosterLoading && (
+        {loading && (
           <div className="muted crunching">
-            <span className="spinner" /> Loading rosters…
+            <span className="spinner" /> Running the game model…
           </div>
         )}
-        {rosterError && (
-          <div className="muted">Rosters unavailable: {rosterError}</div>
+        {resultError && (
+          <div className="muted">Prediction unavailable: {resultError}</div>
         )}
       </div>
 
-      {roster && <RosterView roster={roster} sport="nfl" />}
+      {result && (
+        <ScrollIntoView>
+          <GameResultCard r={result} badgeLabel="Elo + points model" />
+        </ScrollIntoView>
+      )}
+
+      <RosterView roster={roster} sport="nfl" />
 
       <NflPlayerLookup />
     </>

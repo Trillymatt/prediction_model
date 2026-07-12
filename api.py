@@ -26,11 +26,12 @@ Soccer (World Cup) -- same shapes, three-way outcomes:
   GET /api/soccer/games?days=           upcoming matches (WC first)
   GET /api/soccer/game?home=&away=      match outcome: win/draw/win + goals
 
-NFL (schedule + roster directory for now -- projections are being built, see
+NFL (Elo + points game model; player props are the next stage, see
 NFL_SETUP.md):
   GET /api/nfl/games?days=              upcoming games
   GET /api/nfl/players?q=<text>         player autocomplete
   GET /api/nfl/roster?home=&away=       both rosters for a matchup
+  GET /api/nfl/game?home=&away=         game outcome: win prob + projected score
 
 Setup:
     pip install -r requirements.txt
@@ -95,13 +96,15 @@ except Exception as exc:  # noqa: BLE001 - soccer must never break NBA
     soccer_engine = soccer_game_engine = None
     _soccer_load_error = str(exc)
 
-# NFL (schedule stage). Loaded defensively like soccer: a missing table or
-# bad credentials must never break the NBA/soccer apps.
+# NFL. Loaded defensively like soccer: a missing table or bad credentials
+# must never break the NBA/soccer apps.
 try:
     import nfl_common
+    nfl_game_engine = _load_numbered(
+        "nfl_game_projection_engine", "32_nfl_game_projections.py")
     _nfl_load_error = None
 except (Exception, SystemExit) as exc:  # noqa: BLE001 - NFL must never break the others
-    nfl_common = None
+    nfl_common = nfl_game_engine = None
     _nfl_load_error = str(exc)
 
 # Daily "My Picks" boards (computed in the background, cached per day).
@@ -424,7 +427,7 @@ def soccer_game(
         raise _soccer_data_error(exc)
 
 
-# --- NFL (schedule stage -- projections come with the later pipeline stages) --
+# --- NFL (schedule + roster + game-outcome model; props are the next stage) --
 def _require_nfl():
     if nfl_common is None:
         raise HTTPException(
@@ -474,6 +477,28 @@ def nfl_roster(
     _require_nfl()
     try:
         return nfl_common.roster_for_game(home, away)
+    except (LookupError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:  # noqa: BLE001 - table missing / RLS / network
+        raise _nfl_data_error(exc)
+
+
+@app.get("/api/nfl/game")
+def nfl_game(
+    home: str = Query(..., description="home team, e.g. Kansas City Chiefs or KC"),
+    away: str = Query(..., description="away team, e.g. Buffalo Bills or BUF"),
+    date: str | None = Query(None, description="game date YYYY-MM-DD; omit to auto-detect"),
+    game_id: int | None = Query(None, description="schedule game_id, if known"),
+):
+    """Game outcome: win probability + projected score, from an Elo + points
+    model (no trained ML model yet -- see NFL_SETUP.md). Degrades gracefully
+    with thin data: a team with no completed games on file still gets a
+    projection, just a low-confidence, near-even one."""
+    _require_nfl()
+    try:
+        return nfl_game_engine.project_nfl_game(
+            home=home, away=away, game_date=date, game_id=game_id,
+        )
     except (LookupError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:  # noqa: BLE001 - table missing / RLS / network
