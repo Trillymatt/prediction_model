@@ -54,13 +54,44 @@ _SOCCER_STAT_ALIASES = {
     "to be carded": "cards", "yellow card": "cards",
 }
 
+_NFL_STAT_ALIASES = {
+    "passing yards": "pass_yds", "pass yards": "pass_yds", "pass yds": "pass_yds",
+    "passing yds": "pass_yds", "py": "pass_yds",
+    "passing touchdowns": "pass_td", "passing tds": "pass_td", "pass td": "pass_td",
+    "pass tds": "pass_td", "passing td": "pass_td",
+    "completions": "completions", "comp": "completions", "cmp": "completions",
+    "pass attempts": "pass_att", "pass att": "pass_att", "attempts": "pass_att",
+    "interceptions": "interceptions", "int": "interceptions", "ints": "interceptions",
+    "rushing yards": "rush_yds", "rush yards": "rush_yds", "rush yds": "rush_yds",
+    "rushing yds": "rush_yds", "ry": "rush_yds",
+    "rushing touchdowns": "rush_td", "rush td": "rush_td", "rushing td": "rush_td",
+    "rush attempts": "rush_att", "carries": "rush_att", "rush att": "rush_att",
+    "receiving yards": "rec_yds", "rec yards": "rec_yds", "rec yds": "rec_yds",
+    "receiving yds": "rec_yds",
+    "receptions": "receptions", "rec": "receptions", "catches": "receptions",
+    "targets": "targets", "tgt": "targets",
+    "receiving touchdowns": "rec_td", "rec td": "rec_td", "receiving td": "rec_td",
+    "rush + rec yards": "rush_rec_yds", "scrimmage yards": "rush_rec_yds",
+    "rushing + receiving yards": "rush_rec_yds",
+    "pass + rush yards": "pass_rush_yds",
+    "anytime touchdown": "any_td", "anytime td": "any_td", "atd": "any_td",
+    "to score a td": "any_td", "anytime touchdown scorer": "any_td",
+    "total touchdowns": "total_td",
+}
+
 _NBA_SPORTS = {"nba", "basketball"}
 _SOCCER_SPORTS = {"soccer", "football"}
+_NFL_SPORTS = {"nfl", "american football"}
 
 
 def _norm_stat(sport: str, stat, stat_raw) -> str | None:
     """Map a leg's stat to one of our engine keys, or None if not mappable."""
-    aliases = _NBA_STAT_ALIASES if sport in _NBA_SPORTS else _SOCCER_STAT_ALIASES
+    if sport in _NFL_SPORTS:
+        aliases = _NFL_STAT_ALIASES
+    elif sport in _NBA_SPORTS:
+        aliases = _NBA_STAT_ALIASES
+    else:
+        aliases = _SOCCER_STAT_ALIASES
     for cand in (stat, stat_raw):
         if not cand:
             continue
@@ -212,7 +243,8 @@ def _grade_with_llm(leg: dict) -> dict:
     }
 
 
-def analyze(image_bytes: bytes, mime_type: str, *, nba_engine, soccer_engine) -> dict:
+def analyze(image_bytes: bytes, mime_type: str, *, nba_engine, soccer_engine,
+            nfl_engine=None) -> dict:
     """Full pipeline: parse the screenshot, grade every leg, score the parlay.
 
     Raises llm_analysis.LLMUnavailable if the screenshot can't be read at all
@@ -225,7 +257,9 @@ def analyze(image_bytes: bytes, mime_type: str, *, nba_engine, soccer_engine) ->
     for leg in raw_legs:
         sport = (leg.get("sport") or "unknown").lower()
         graded = None
-        if sport in _NBA_SPORTS and nba_engine is not None:
+        if sport in _NFL_SPORTS and nfl_engine is not None:
+            graded = _grade_with_engine(nfl_engine, leg, "nfl", soccer=False)
+        elif sport in _NBA_SPORTS and nba_engine is not None:
             graded = _grade_with_engine(nba_engine, leg, "nba", soccer=False)
         elif sport in _SOCCER_SPORTS and soccer_engine is not None:
             graded = _grade_with_engine(soccer_engine, leg, "soccer", soccer=True)

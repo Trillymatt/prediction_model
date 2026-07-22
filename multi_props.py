@@ -41,6 +41,17 @@ SOCCER_GK_STATS = ["saves", "passes", "goals_conceded", "goals", "assists"]
 # burying players who've dropped out of the matchday squad.
 SOCCER_ROSTER_MIN_RECENT_MINUTES = 20.0
 
+# NFL default markets, by position -- the props people actually shop. A QB
+# leads with passing, a back with rushing + receiving, a pass-catcher with
+# receiving, and everyone gets the anytime-TD market. Stats without data are
+# filtered downstream, so this degrades to whatever the engine can project.
+NFL_DEFAULT_STATS = ["rush_rec_yds", "rec_yds", "receptions", "rush_yds", "any_td"]
+NFL_QB_STATS = ["pass_yds", "pass_td", "completions", "interceptions", "rush_yds"]
+NFL_RB_STATS = ["rush_yds", "rush_att", "rec_yds", "receptions", "any_td"]
+NFL_REC_STATS = ["rec_yds", "receptions", "targets", "rec_td", "any_td"]
+# Recent scrimmage/passing yards a player needs to show high on an NFL roster.
+NFL_ROSTER_STAT_COLUMNS = ["pass_yds", "rush_yds", "rec_yds"]
+
 
 def _chunks(seq, n):
     for i in range(0, len(seq), n):
@@ -83,13 +94,38 @@ def _soccer_default_stats(engine, player_name):
     return SOCCER_DEFAULT_STATS
 
 
+def _nfl_season_type(game_type: str) -> str:
+    return {"regular": "regular", "playoffs": "playoffs"}.get(
+        (game_type or "auto").lower(), "auto")
+
+
+def _nfl_default_stats(engine, player_name):
+    """Position-aware default markets for an NFL player (QB / RB / receiver),
+    falling back to the general set if the position can't be resolved."""
+    try:
+        pos = (engine.find_player(player_name).get("position") or "").upper()
+    except Exception:  # noqa: BLE001 - unknown position => general defaults
+        return NFL_DEFAULT_STATS
+    if pos == "QB":
+        return NFL_QB_STATS
+    if pos in ("RB", "FB"):
+        return NFL_RB_STATS
+    if pos in ("WR", "TE"):
+        return NFL_REC_STATS
+    return NFL_DEFAULT_STATS
+
+
 def _project(engine, sport, player, stat, line, opponent, location, game_type):
-    """Dispatch to the right engine. Both return the same output shape
+    """Dispatch to the right engine. All return the same output shape
     (projection, sigma, p_over/p_under, recommendation, factors, ...) so
     everything downstream is sport-agnostic."""
     if sport == "soccer":
         return engine.project_soccer_player(
             player_name=player, stat=stat, line=line, opponent=opponent or None)
+    if sport == "nfl":
+        return engine.project_player(
+            player_name=player, stat=stat, line=line, opponent=opponent or None,
+            home_away=_home_away(location), season_type=_nfl_season_type(game_type))
     return engine.project_player(
         player_name=player, stat=stat, line=line, opponent=opponent or None,
         home_away=_home_away(location), season_type=_season_type(game_type))
@@ -279,6 +315,56 @@ def soccer_roster(soccer, home: str, away: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Roster: every player on both teams of an NFL game
+# ---------------------------------------------------------------------------
+def _nfl_recent_usage(engine, team_names):
+    """{player_id: recent scrimmage/passing yards} this season, for ranking a
+    roster so featured players sit at the top. Empty when logs aren't loaded."""
+    nc = engine.nc
+    try:
+        res = (
+            nc.supabase.table(nc.LOGS_TABLE)
+            .select("player_id,game_date," + ",".join(NFL_ROSTER_STAT_COLUMNS))
+            .in_("team", list(team_names))
+            .eq("season", nc.current_season())
+            .order("game_date", desc=True)
+            .execute()
+        )
+    except Exception:  # noqa: BLE001 - logs table missing => no ranking
+        return {}
+    recent = {}
+    counts = {}
+    for r in res.data or []:
+        pid = r.get("player_id")
+        if pid is None or counts.get(pid, 0) >= 3:   # last 3 games per player
+            continue
+        counts[pid] = counts.get(pid, 0) + 1
+        yards = sum((r.get(c) or 0) for c in NFL_ROSTER_STAT_COLUMNS)
+        recent[pid] = recent.get(pid, 0.0) + yards
+    return {pid: v / counts[pid] for pid, v in recent.items()}
+
+
+def nfl_roster(engine, home: str, away: str) -> dict:
+    """Both teams' rosters for a matchup -- the NFL twin of nba_roster().
+    Ordered by recent usage (featured players first) where game logs exist,
+    otherwise offense -> defense -> specialists from the directory. Each player
+    carries the opponent + which side he's on so tapping projects the right
+    matchup."""
+    base = engine.nc.roster_for_game(home, away)
+    usage = _nfl_recent_usage(engine, {base["home_team"], base["away_team"]})
+    for t in base["teams"]:
+        for p in t["players"]:
+            p["opponent"] = t["opponent"]
+            p["location"] = t["side"]
+            p["recent_yds"] = round(usage.get(p["player_id"], 0.0), 1)
+        if usage:
+            # Featured players (by recent yards) first; keep directory order as
+            # the tiebreaker so position grouping still reads sensibly.
+            t["players"].sort(key=lambda p: p.get("recent_yds") or 0, reverse=True)
+    return base
+
+
+# ---------------------------------------------------------------------------
 # Multi-stat projection for one player ("what he's projected for")
 # ---------------------------------------------------------------------------
 def player_projections(engine, player: str, stats=None, opponent: str = None,
@@ -290,10 +376,16 @@ def player_projections(engine, player: str, stats=None, opponent: str = None,
     for each stat so the frontend can show the numbers and compute an instant
     over/under read for any line the user types (same normal-CDF math the
     engine uses), and pre-fill a suggested line per stat."""
-    if sport == "soccer" and not stats:
+    if not stats and sport == "soccer":
         defaults = _soccer_default_stats(engine, player)
+    elif not stats and sport == "nfl":
+        defaults = _nfl_default_stats(engine, player)
+    elif sport == "soccer":
+        defaults = SOCCER_DEFAULT_STATS
+    elif sport == "nfl":
+        defaults = NFL_DEFAULT_STATS
     else:
-        defaults = SOCCER_DEFAULT_STATS if sport == "soccer" else DEFAULT_STATS
+        defaults = DEFAULT_STATS
     stats = [s for s in (stats or defaults) if s in engine.STAT_DEFS]
 
     meta = {}

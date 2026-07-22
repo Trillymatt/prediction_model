@@ -29,6 +29,7 @@ CLI check:  python daily_picks.py nba|soccer
 """
 
 import importlib.util
+import math
 import os
 import sys
 import threading
@@ -63,6 +64,32 @@ NBA_GAME_MIN_P = 0.60
 NBA_MIN_L10_MINUTES = 24.0   # "players that actually play"
 NBA_PLAYERS_PER_TEAM = 5
 
+NFL_PLAYERS_PER_TEAM = 6
+NFL_MIN_RECENT_YARDS = 25.0     # recent scrimmage/passing yards to be "featured"
+NFL_HEADLINE_MIN_P = 0.62
+NFL_GAME_MIN_P = 0.55
+NFL_TD_MIN_P = 0.45             # anytime-TD probs top out ~0.6, so this is strong
+# "X+" alt-line ladders; the headline is the HIGHEST rung cleared with the floor
+# probability, so a star doesn't headline a trivial "25+ pass yards".
+NFL_LADDERS = {
+    "pass_yds": (200, 225, 250, 275, 300, 325),
+    "pass_td": (1, 2, 3),
+    "rush_yds": (40, 50, 60, 75, 90, 100, 125),
+    "rush_att": (12, 15, 18, 20),
+    "rec_yds": (40, 50, 60, 75, 90, 100),
+    "receptions": (3, 4, 5, 6, 7, 8),
+    "targets": (4, 6, 8, 10),
+}
+NFL_STAT_NOUNS = {
+    "pass_yds": "Pass Yards", "pass_td": "Pass TDs", "rush_yds": "Rush Yards",
+    "rush_att": "Carries", "rec_yds": "Rec Yards", "receptions": "Receptions",
+    "targets": "Targets", "any_td": "Anytime TD",
+}
+# Which markets to try per role (inferred from a player's recent usage).
+NFL_QB_SET = ("pass_yds", "pass_td", "rush_yds")
+NFL_RB_SET = ("rush_yds", "rush_att", "rec_yds", "receptions", "any_td")
+NFL_REC_SET = ("rec_yds", "receptions", "targets", "any_td")
+
 SOCCER_PLAYERS_PER_TEAM = 5
 SOCCER_MIN_RECENT_MINUTES = 30.0
 # Poisson anytime-scorer probabilities live in the 0.20-0.45 range (a 39%
@@ -79,12 +106,15 @@ MAX_NO_GOAL_PICKS = 2        # keep the board from being all negatives
 # Engine wiring. api.py injects its already-loaded engine modules via init();
 # the CLI path loads them itself.
 # ---------------------------------------------------------------------------
-_engines = {"nba": None, "nba_game": None, "soccer": None, "soccer_game": None}
+_engines = {"nba": None, "nba_game": None, "soccer": None, "soccer_game": None,
+            "nfl": None, "nfl_game": None}
 
 
-def init(nba=None, nba_game=None, soccer=None, soccer_game=None):
+def init(nba=None, nba_game=None, soccer=None, soccer_game=None,
+         nfl=None, nfl_game=None):
     for key, mod in (("nba", nba), ("nba_game", nba_game),
-                     ("soccer", soccer), ("soccer_game", soccer_game)):
+                     ("soccer", soccer), ("soccer_game", soccer_game),
+                     ("nfl", nfl), ("nfl_game", nfl_game)):
         if mod is not None:
             _engines[key] = mod
 
@@ -103,6 +133,11 @@ def _ensure_engines(sport):
             _engines["nba"] = _load_numbered("projection_engine", "09_projections.py")
         if _engines["nba_game"] is None:
             _engines["nba_game"] = _load_numbered("game_projection_engine", "14_game_projections.py")
+    elif sport == "nfl":
+        if _engines["nfl"] is None:
+            _engines["nfl"] = _load_numbered("nfl_projection_engine", "38_nfl_projections.py")
+        if _engines["nfl_game"] is None:
+            _engines["nfl_game"] = _load_numbered("nfl_game_projection_engine", "39_nfl_game_projections.py")
     else:
         if _engines["soccer"] is None:
             _engines["soccer"] = _load_numbered("soccer_projection_engine", "22_soccer_projections.py")
@@ -495,6 +530,192 @@ def _build_soccer():
             "note": note}
 
 
+# ---------------------------------------------------------------------------
+# NFL
+# ---------------------------------------------------------------------------
+def _nfl_candidates(nfl, team):
+    """Featured players for one team from its logs: recent scrimmage/passing
+    yards, with a role (QB / RB / receiver) inferred from recent usage so we
+    only try the markets that make sense for each player."""
+    nc = nfl.nc
+    cols = ("player_id,player_name,team,game_date,pass_att,rush_att,targets,"
+            "pass_yds,rush_yds,rec_yds")
+    rows = nc.fetch_all(nc.LOGS_TABLE, cols,
+                        filters=[("eq", "team", team),
+                                 ("eq", "season", nfl.CURRENT_SEASON)],
+                        order_col="game_date")
+    if not rows and nc.normalize_team(team) != team:
+        rows = nc.fetch_all(nc.LOGS_TABLE, cols,
+                            filters=[("eq", "team", nc.normalize_team(team)),
+                                     ("eq", "season", nfl.CURRENT_SEASON)],
+                            order_col="game_date")
+    if not rows:
+        return []
+
+    recent_team_dates = sorted({r["game_date"] for r in rows})[-2:]
+    by_player = {}
+    for r in rows:
+        by_player.setdefault(r["player_id"], []).append(r)
+
+    cands = []
+    for pid, plist in by_player.items():
+        if plist[-1]["game_date"] not in recent_team_dates:
+            continue                       # dropped out of the lineup
+        recent = plist[-3:]
+        n = len(recent)
+        yds = sum((g.get("pass_yds") or 0) + (g.get("rush_yds") or 0)
+                  + (g.get("rec_yds") or 0) for g in recent) / n
+        if yds < NFL_MIN_RECENT_YARDS:
+            continue
+        pass_att = sum(g.get("pass_att") or 0 for g in recent) / n
+        rush_att = sum(g.get("rush_att") or 0 for g in recent) / n
+        targets = sum(g.get("targets") or 0 for g in recent) / n
+        if pass_att >= 8:
+            stat_set = NFL_QB_SET
+        elif rush_att >= max(targets, 3):
+            stat_set = NFL_RB_SET
+        else:
+            stat_set = NFL_REC_SET
+        cands.append({"player_id": pid, "player_name": plist[-1]["player_name"],
+                      "team": team, "recent_yds": yds, "stat_set": stat_set})
+
+    cands.sort(key=lambda c: c["recent_yds"], reverse=True)
+    return cands[:NFL_PLAYERS_PER_TEAM]
+
+
+def _nfl_player_pick(nfl, cand, slate_date):
+    """One player -> his strongest alt-line claim + graded cards for his set."""
+    inj = nfl.nc.injury_status(cand["player_id"])
+    if "out" in ((inj or {}).get("status") or "").lower():
+        return None
+
+    results = {}
+    for stat in cand["stat_set"]:
+        r = _project_with_retry(nfl.project_player, cand["player_name"], stat)
+        if r:
+            results[stat] = r
+    if not results:
+        return None
+
+    # Highest ladder rung cleared with the board floor, else the looser game floor.
+    headline = None   # (stat, milestone, p, line)
+    for min_p in (NFL_HEADLINE_MIN_P, NFL_GAME_MIN_P):
+        for stat, r in results.items():
+            if stat == "any_td":
+                lam = r.get("projection") or 0.0
+                p = 1.0 - math.exp(-lam)
+                if p >= NFL_TD_MIN_P and (headline is None or p > headline[2]):
+                    headline = ("any_td", 1, p, 0.5)
+            elif r.get("sigma"):
+                hit = _best_milestone(r["projection"], r["sigma"],
+                                      NFL_LADDERS[stat], min_p, nfl.normal_cdf)
+                if hit and (headline is None or hit[1] > headline[2]):
+                    headline = (stat, hit[0], hit[1], hit[0] - 0.5)
+        if headline is not None:
+            break
+    if headline is None:
+        return None
+
+    stat, milestone, p, line = headline
+    # Graded cards: the headline first, then the rest of his set at a sensible line.
+    predictions = []
+    if stat == "any_td":
+        td = _project_with_retry(nfl.project_player, cand["player_name"], "any_td", line=0.5)
+        if td:
+            predictions.append(td)
+        head_text = "Anytime TD"
+    else:
+        predictions.append(_grade_normal(nfl, results[stat], line))
+        head_text = f"{milestone}+ {NFL_STAT_NOUNS.get(stat, stat)}"
+    for other, r in results.items():
+        if other == stat:
+            continue
+        if other == "any_td":
+            td = _project_with_retry(nfl.project_player, cand["player_name"], "any_td", line=0.5)
+            if td:
+                predictions.append(td)
+        elif r.get("sigma"):
+            hit = _best_milestone(r["projection"], r["sigma"],
+                                  NFL_LADDERS[other], 0.5, nfl.normal_cdf)
+            m = hit[0] if hit else NFL_LADDERS[other][0]
+            predictions.append(_grade_normal(nfl, r, m - 0.5))
+
+    r0 = results[stat]
+    return {
+        "sport": "nfl",
+        "player_id": cand["player_id"],
+        "player_name": r0["player_name"],
+        "team": r0["team"],
+        "slate_team": cand["team"],
+        "position": r0.get("position"),
+        "opponent": r0.get("opponent"),
+        "home_away": r0.get("home_away"),
+        "game_date": slate_date,
+        "stat": stat,
+        "headline": head_text,
+        "direction": "OVER",
+        "line": line,
+        "probability": round(p, 4),
+        "predictions": predictions,
+    }
+
+
+def _build_nfl():
+    nfl, nfl_game = _engines["nfl"], _engines["nfl_game"]
+    games = nfl_game.upcoming_games(days=7)
+    if not games:
+        return {"slate_date": None, "picks": [],
+                "note": "No NFL games in the next week."}
+    slate_date = games[0]["game_date"]
+    slate = games   # the whole week's slate (Thu -> Mon)
+
+    teams = []
+    for g in slate:
+        for t in (g["home_team"], g["away_team"]):
+            if t not in teams:
+                teams.append(t)
+
+    candidates = []
+    for team in teams:
+        candidates.extend(_swallow(_nfl_candidates, nfl, team) or [])
+
+    picks = []
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
+        for res in pool.map(lambda c: _swallow(_nfl_player_pick, nfl, c, slate_date),
+                            candidates):
+            if res:
+                picks.append(res)
+
+    picks.sort(key=lambda p: p["probability"], reverse=True)
+    board = _cap_board([p for p in picks if p["probability"] >= NFL_HEADLINE_MIN_P])
+
+    # Per-game board: each slate game with its outcome + strongest player bets.
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
+        outcomes = list(pool.map(
+            lambda g: _swallow(nfl_game.project_game, g["home_team"],
+                               g["away_team"], g["game_date"], g["game_id"]),
+            slate,
+        ))
+    games_board = []
+    for g, outcome in zip(slate, outcomes):
+        match_teams = (g["home_team"], g["away_team"])
+        games_board.append({
+            "game_id": g["game_id"],
+            "game_date": g["game_date"],
+            "home_team": g["home_team"],
+            "away_team": g["away_team"],
+            "week": g.get("week"),
+            "season_type": g.get("season_type"),
+            "outcome": outcome,
+            "picks": [p for p in picks if p.get("slate_team") in match_teams][:GAME_PICKS],
+        })
+
+    note = (None if slate_date == _engines["nfl"].nc.today_eastern().isoformat()
+            else f"Showing the upcoming Week slate ({slate_date}).")
+    return {"slate_date": slate_date, "picks": board, "games": games_board,
+            "note": note}
+
+
 def _swallow(fn, *args):
     """One bad player must never sink the whole board."""
     try:
@@ -546,8 +767,10 @@ def get_picks(sport: str) -> dict:
 
 
 def warm():
-    """Start both builds in the background (called at API startup)."""
-    for sport in ("nba", "soccer"):
+    """Start the season's builds in the background (called at API startup).
+    NFL leads now that the World Cup is over; NBA warms alongside it. Soccer is
+    retired -- its board still builds on demand if the tab is re-enabled."""
+    for sport in ("nfl", "nba"):
         try:
             get_picks(sport)
         except Exception:
@@ -557,7 +780,12 @@ def warm():
 def _run_build(sport, today):
     try:
         _ensure_engines(sport)
-        body = _build_nba() if sport == "nba" else _build_soccer()
+        if sport == "nba":
+            body = _build_nba()
+        elif sport == "nfl":
+            body = _build_nfl()
+        else:
+            body = _build_soccer()
         entry = {"status": "ready", "ts": time.time(), **body}
     except Exception as exc:  # noqa: BLE001 - report, don't crash the API
         traceback.print_exc()
@@ -584,12 +812,17 @@ def _public(sport, today, entry):
 # CLI
 # ---------------------------------------------------------------------------
 def main():
-    sport = (sys.argv[1] if len(sys.argv) > 1 else "nba").lower()
-    if sport not in ("nba", "soccer"):
-        raise SystemExit("usage: python daily_picks.py [nba|soccer]")
+    sport = (sys.argv[1] if len(sys.argv) > 1 else "nfl").lower()
+    if sport not in ("nba", "soccer", "nfl"):
+        raise SystemExit("usage: python daily_picks.py [nfl|nba|soccer]")
     _ensure_engines(sport)
     t0 = time.time()
-    body = _build_nba() if sport == "nba" else _build_soccer()
+    if sport == "nba":
+        body = _build_nba()
+    elif sport == "nfl":
+        body = _build_nfl()
+    else:
+        body = _build_soccer()
     print(f"\n=== {sport.upper()} board for {body.get('slate_date')} "
           f"({time.time() - t0:.0f}s) ===")
     if body.get("note"):

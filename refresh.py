@@ -13,12 +13,13 @@ When it does run, it executes the pipeline in dependency order:
     01 game logs -> 02 team stats -> 03 schedule -> 04 players ->
     05 defense-vs-pos -> 06 averages -> 07 head-to-head -> 08 injuries ->
     10 rebuild training data -> 11 retrain model -> 12/13 game model ->
-    20 soccer schedule -> 21 soccer player logs -> 24 FIFA pass stats ->
-    30 NFL schedule
+    30 NFL schedule -> 31 rosters -> 32 player logs -> 33 injuries ->
+    34/35 prop models -> 36/37 game model
 
-The gate also checks soccer_schedule and nfl_schedule, so during the World
-Cup / NFL season those sides refresh nightly even on NBA off-nights (and
-vice versa).
+The gate also checks nfl_schedule, so during the NFL season that side refreshes
+nightly even on NBA off-nights (and vice versa), and the NFL models sharpen
+each week as results come in. Soccer (World Cup) is retired: its pull scripts
+stay in the repo but are out of the nightly run.
 
 Each step's output is streamed; a failing step is logged but doesn't abort the
 rest (the data scripts are all idempotent upserts, so a partial run is safe).
@@ -48,6 +49,7 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 # 10 before 11; 12 before 13; soccer: 20 schedule before 21 player logs before
 # 24 pass enrichment.)
 PIPELINE = [
+    # NBA (unchanged).
     "01_nba_data_pull.py",
     "02_team_stats.py",
     "03_schedule.py",
@@ -60,11 +62,19 @@ PIPELINE = [
     "11_train_model.py",
     "12_build_game_training_data.py",
     "13_train_game_model.py",
-    "20_soccer_schedule.py",
-    "21_soccer_player_logs.py",
-    "24_soccer_fifa_passes.py",
+    # NFL: schedule -> rosters -> box-score logs -> injuries, then rebuild +
+    # retrain the prop and game models so the models sharpen every week as
+    # results come in. Train steps no-op cleanly while logs are still sparse.
     "30_nfl_schedule.py",
     "31_nfl_rosters.py",
+    "32_nfl_player_logs.py",
+    "33_nfl_injuries.py",
+    "34_nfl_build_props_training.py",
+    "35_nfl_train_props.py",
+    "36_nfl_build_game_training.py",
+    "37_nfl_train_game_model.py",
+    # Soccer (World Cup) is retired -- its scripts (20/21/24) stay in the repo
+    # but are out of the nightly run now that the tournament is over.
 ]
 
 
@@ -159,12 +169,11 @@ def main():
     print(f"[{stamp}] refresh starting (yesterday = {yesterday})")
 
     if not force and not games_were_played(yesterday) \
-            and not soccer_matches_were_played(yesterday) \
             and not nfl_games_were_played(yesterday):
         if schedule_is_stale():
             print("Schedule table has no future games -- reseeding via full run.")
         else:
-            print("No NBA, soccer or NFL games found for yesterday -- nothing "
+            print("No NBA or NFL games found for yesterday -- nothing "
                   "to refresh. Exiting.")
             return
 

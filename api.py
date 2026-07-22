@@ -95,13 +95,16 @@ except Exception as exc:  # noqa: BLE001 - soccer must never break NBA
     soccer_engine = soccer_game_engine = None
     _soccer_load_error = str(exc)
 
-# NFL (schedule stage). Loaded defensively like soccer: a missing table or
-# bad credentials must never break the NBA/soccer apps.
+# NFL. Loaded defensively like soccer: a missing table, missing models or bad
+# credentials must never break the NBA/soccer apps. nfl_common carries the
+# schedule/roster/ratings; the two engines add projections (props + game).
 try:
     import nfl_common
+    nfl_engine = _load_numbered("nfl_projection_engine", "38_nfl_projections.py")
+    nfl_game_engine = _load_numbered("nfl_game_projection_engine", "39_nfl_game_projections.py")
     _nfl_load_error = None
 except (Exception, SystemExit) as exc:  # noqa: BLE001 - NFL must never break the others
-    nfl_common = None
+    nfl_common = nfl_engine = nfl_game_engine = None
     _nfl_load_error = str(exc)
 
 # Daily "My Picks" boards (computed in the background, cached per day).
@@ -116,6 +119,7 @@ import multi_props
 daily_picks.init(
     nba=engine, nba_game=game_engine,
     soccer=soccer_engine, soccer_game=soccer_game_engine,
+    nfl=nfl_engine, nfl_game=nfl_game_engine,
 )
 
 
@@ -162,10 +166,12 @@ def picks(sport: str = Query("nba", description="nba | soccer")):
     outcome projection and strongest player picks). Returns status=building
     while the daily build is running; the frontend polls until it's ready."""
     sport = sport.lower()
-    if sport not in ("nba", "soccer"):
-        raise HTTPException(status_code=400, detail="sport must be nba or soccer")
+    if sport not in ("nba", "soccer", "nfl"):
+        raise HTTPException(status_code=400, detail="sport must be nba, nfl or soccer")
     if sport == "soccer":
         _require_soccer()
+    if sport == "nfl":
+        _require_nfl()
     return daily_picks.get_picks(sport)
 
 
@@ -424,9 +430,9 @@ def soccer_game(
         raise _soccer_data_error(exc)
 
 
-# --- NFL (schedule stage -- projections come with the later pipeline stages) --
+# --- NFL (full stack: schedule, rosters, props + game outcomes) -------------
 def _require_nfl():
-    if nfl_common is None:
+    if nfl_common is None or nfl_engine is None or nfl_game_engine is None:
         raise HTTPException(
             status_code=503,
             detail=f"NFL side unavailable: {_nfl_load_error}",
@@ -437,7 +443,7 @@ def _nfl_data_error(exc: Exception) -> HTTPException:
     return HTTPException(
         status_code=503,
         detail=f"NFL data unavailable ({exc}). If this is a fresh setup, run "
-               f"the SQL + schedule/roster load in NFL_SETUP.md.",
+               f"the SQL + schedule/roster/log load in NFL_SETUP.md.",
     )
 
 
@@ -451,14 +457,83 @@ def nfl_games(days: int = Query(30, ge=1, le=250)):
         raise _nfl_data_error(exc)
 
 
+@app.get("/api/nfl/stats")
+def nfl_stats():
+    """The NFL stats the tool can project (sorted for a stable dropdown)."""
+    _require_nfl()
+    return {"stats": sorted(nfl_engine.STAT_DEFS.keys())}
+
+
 @app.get("/api/nfl/players")
 def nfl_players(q: str = Query("", description="name fragment"),
                  limit: int = Query(10, ge=1, le=25)):
-    """Player autocomplete against nfl_players (roster directory; no stats
-    yet -- see NFL_SETUP.md)."""
+    """Player autocomplete against nfl_players (roster directory)."""
     _require_nfl()
     try:
         return {"players": nfl_common.search_players(q, limit=limit)}
+    except Exception as exc:  # noqa: BLE001 - table missing / RLS / network
+        raise _nfl_data_error(exc)
+
+
+@app.get("/api/nfl/project")
+def nfl_project(
+    player: str = Query(..., description="exact player name from autocomplete"),
+    stat: str = Query(..., description="one of /api/nfl/stats"),
+    line: float | None = Query(None, description="the over/under line from your book"),
+    opponent: str | None = Query(None, description="opponent team; omit to auto-detect"),
+    location: str = Query("auto", description="auto | home | away"),
+    game_type: str = Query("auto", description="auto | regular | playoffs"),
+):
+    """Project an NFL stat and (if a line is given) grade it."""
+    _require_nfl()
+    home_away = {"home": "HOME", "away": "AWAY"}.get(location.lower())
+    season_type = {"regular": "regular", "playoffs": "playoffs"}.get(game_type.lower(), "auto")
+    try:
+        return nfl_engine.project_player(
+            player_name=player, stat=stat, line=line, opponent=opponent or None,
+            home_away=home_away, season_type=season_type,
+        )
+    except (LookupError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:  # noqa: BLE001 - table missing / RLS / network
+        raise _nfl_data_error(exc)
+
+
+@app.get("/api/nfl/player/projections")
+def nfl_player_projections(
+    player: str = Query(..., description="exact player name from autocomplete"),
+    stats: str | None = Query(None, description="comma-separated stats; omit for defaults"),
+    opponent: str | None = Query(None, description="opponent team; omit to auto-detect"),
+    location: str = Query("auto", description="auto | home | away"),
+    game_type: str = Query("auto", description="auto | regular | playoffs"),
+):
+    """One player's projection across several NFL stats at once."""
+    _require_nfl()
+    stat_list = [s.strip() for s in stats.split(",")] if stats else None
+    try:
+        return multi_props.player_projections(
+            nfl_engine, player, stats=stat_list, opponent=opponent or None,
+            location=None if location == "auto" else location,
+            game_type=game_type, sport="nfl",
+        )
+    except (LookupError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:  # noqa: BLE001 - table missing / RLS / network
+        raise _nfl_data_error(exc)
+
+
+@app.post("/api/nfl/project-batch")
+def nfl_project_batch(payload: dict = Body(..., description='{"props": [{player, stat, line, side?, opponent?, location?, game_type?}]}')):
+    """Grade a hand-built list of NFL props as a parlay (NFL twin of
+    /api/project-batch)."""
+    _require_nfl()
+    props = payload.get("props") or []
+    if not isinstance(props, list) or not props:
+        raise HTTPException(status_code=400, detail="Send a non-empty 'props' list.")
+    if len(props) > 25:
+        raise HTTPException(status_code=400, detail="Too many props (max 25).")
+    try:
+        return multi_props.grade_batch(nfl_engine, props, sport="nfl")
     except Exception as exc:  # noqa: BLE001 - table missing / RLS / network
         raise _nfl_data_error(exc)
 
@@ -468,12 +543,33 @@ def nfl_roster(
     home: str = Query(..., description="home team, e.g. Kansas City Chiefs or KC"),
     away: str = Query(..., description="away team, e.g. Buffalo Bills or BUF"),
 ):
-    """Both teams' rosters for a matchup, offense -> defense -> specialists.
-    No per-player stats yet (that's the next pipeline stage) -- tapping a
-    player is a placeholder in the frontend until then."""
+    """Both teams' rosters for a matchup, featured players first. Tapping a
+    player projects the right matchup (opponent + home/away carried per row)."""
     _require_nfl()
     try:
-        return nfl_common.roster_for_game(home, away)
+        return multi_props.nfl_roster(nfl_engine, home, away)
+    except (LookupError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:  # noqa: BLE001 - table missing / RLS / network
+        raise _nfl_data_error(exc)
+
+
+@app.get("/api/nfl/game")
+def nfl_game(
+    home: str = Query(..., description="home team, e.g. KC or Kansas City Chiefs"),
+    away: str = Query(..., description="away team, e.g. BUF or Buffalo Bills"),
+    date: str | None = Query(None, description="game date YYYY-MM-DD; omit to auto-detect"),
+    game_id: int | None = Query(None, description="schedule game_id, if known"),
+    game_type: str = Query("auto", description="auto | regular | playoffs"),
+):
+    """Game outcome: win / tie / loss, projected score, spread, total, team TDs."""
+    _require_nfl()
+    season_type = {"regular": "regular", "playoffs": "playoffs"}.get(game_type.lower(), "auto")
+    try:
+        return nfl_game_engine.project_game(
+            home=home, away=away, game_date=date, game_id=game_id,
+            season_type=season_type,
+        )
     except (LookupError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:  # noqa: BLE001 - table missing / RLS / network
@@ -514,7 +610,7 @@ async def analyze_slip(image: UploadFile = File(..., description="bet-slip scree
     # loop so one slip doesn't freeze the rest of the API for several seconds.
     work = functools.partial(
         slip_analysis.analyze, data, mime,
-        nba_engine=engine, soccer_engine=soccer_engine,
+        nba_engine=engine, soccer_engine=soccer_engine, nfl_engine=nfl_engine,
     )
     try:
         return await run_in_threadpool(work)
