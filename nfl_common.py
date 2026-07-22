@@ -13,7 +13,9 @@ The NFL pipeline is being built in stages (see NFL_SETUP.md):
 """
 
 import os
-from datetime import datetime, timedelta
+import math
+import time
+from datetime import datetime, timedelta, date
 
 from dotenv import load_dotenv
 from supabase import create_client, Client
@@ -24,7 +26,20 @@ from supabase import create_client, Client
 # ---------------------------------------------------------------------------
 SCHEDULE_TABLE = "nfl_schedule"
 PLAYERS_TABLE = "nfl_players"
+LOGS_TABLE = "nfl_player_game_logs"       # per-player box scores (stage 2b)
+INJURIES_TABLE = "nfl_injuries"           # ESPN team injury reports (stage 2b)
 PAGE_SIZE = 1000                          # PostgREST page cap, same as elsewhere
+
+# Season ratings. NFL home-field advantage is worth roughly this many points;
+# it's removed before computing opponent-adjusted strength so a team isn't
+# credited for playing at home. SRS is solved by fixed-point iteration.
+HFA_POINTS = 2.0
+SRS_ITERS = 30
+# Early in the year a team's own margins are noisy, so ratings are shrunk toward
+# the prior-season rating (or league average) until this many games are played.
+RATING_PRIOR_GAMES = 6
+# Season types that count toward ratings/form (preseason is meaningless).
+RATED_SEASON_TYPES = ("regular", "playoffs")
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ENV_PATH = os.path.join(HERE, ".env")
@@ -294,3 +309,254 @@ def upcoming_games(days: int = 30) -> list:
     rows = [g for g in rows if not game_has_started(g, now=now)]
     rows.sort(key=lambda g: (g.get("game_date") or "", g.get("game_time") or ""))
     return rows
+
+
+# ---------------------------------------------------------------------------
+# Season + schedule access (cached) -- the football twin of soccer_common's
+# schedule cache. Every rating/form read shares one fetch so the API isn't
+# re-paging the whole schedule table on each request.
+# ---------------------------------------------------------------------------
+def current_season() -> str:
+    """The in-progress NFL season label (its starting year, e.g. '2026').
+
+    The NFL season runs Sep -> Feb, labeled by the starting year, so January /
+    February playoff games belong to the previous calendar year's season.
+    """
+    today = today_eastern()
+    return str(today.year if today.month >= 3 else today.year - 1)
+
+
+SCHEDULE_CACHE_TTL = 120.0
+_schedule_cache = {"rows": None, "at": 0.0}
+
+
+def fetch_schedule_rows(force=False):
+    """Every nfl_schedule row, oldest-first, cached for SCHEDULE_CACHE_TTL."""
+    now = time.monotonic()
+    if (not force and _schedule_cache["rows"] is not None
+            and now - _schedule_cache["at"] < SCHEDULE_CACHE_TTL):
+        return _schedule_cache["rows"]
+    rows = fetch_all(
+        SCHEDULE_TABLE,
+        "game_id,game_date,game_time,season,season_type,week,home_team,away_team,"
+        "status,home_score,away_score",
+        order_col="game_date",
+    )
+    _schedule_cache.update(rows=rows, at=now)
+    return rows
+
+
+def _num(value):
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _avg(total, count):
+    return total / count if count else None
+
+
+def completed_team_games(schedule_rows, team, seasons=None):
+    """A team's completed rated games (regular + playoffs), oldest-first.
+
+    Each entry: {date, season, opponent, scored, allowed, home, won, tied,
+    margin_neutral} where margin_neutral removes home-field advantage so the
+    value reflects true strength regardless of venue.
+    """
+    team = normalize_team(team)
+    out = []
+    for g in schedule_rows:
+        if g.get("status") != "completed":
+            continue
+        if (g.get("season_type") or "regular") not in RATED_SEASON_TYPES:
+            continue
+        if seasons is not None and str(g.get("season")) not in seasons:
+            continue
+        hs, as_ = _num(g.get("home_score")), _num(g.get("away_score"))
+        if hs is None or as_ is None:
+            continue
+        home, away = normalize_team(g.get("home_team")), normalize_team(g.get("away_team"))
+        if team == home:
+            scored, allowed, opp, is_home = hs, as_, away, True
+        elif team == away:
+            scored, allowed, opp, is_home = as_, hs, home, False
+        else:
+            continue
+        margin = scored - allowed
+        # Neutralize home field so strength isn't inflated by playing at home.
+        margin_neutral = margin - (HFA_POINTS if is_home else -HFA_POINTS)
+        out.append({
+            "date": parse_date(g.get("game_date")),
+            "season": str(g.get("season")),
+            "opponent": opp,
+            "scored": scored,
+            "allowed": allowed,
+            "home": is_home,
+            "won": scored > allowed,
+            "tied": scored == allowed,
+            "margin_neutral": margin_neutral,
+        })
+    return out
+
+
+def _srs_ratings(schedule_rows, seasons):
+    """Simple Rating System over the given seasons: each team's rating is its
+    average neutral-site point margin plus its average opponent's rating,
+    solved by fixed-point iteration. Positive = better than an average team."""
+    games = {}
+    for g in schedule_rows:
+        if g.get("status") != "completed":
+            continue
+        if (g.get("season_type") or "regular") not in RATED_SEASON_TYPES:
+            continue
+        if str(g.get("season")) not in seasons:
+            continue
+        hs, as_ = _num(g.get("home_score")), _num(g.get("away_score"))
+        if hs is None or as_ is None:
+            continue
+        home, away = normalize_team(g.get("home_team")), normalize_team(g.get("away_team"))
+        if not home or not away:
+            continue
+        margin = (hs - as_) - HFA_POINTS   # from home team's view, HFA removed
+        games.setdefault(home, []).append((away, margin))
+        games.setdefault(away, []).append((home, -margin))
+    if not games:
+        return {}, {}
+
+    avg_margin = {t: sum(m for _, m in gl) / len(gl) for t, gl in games.items()}
+    ratings = dict(avg_margin)
+    for _ in range(SRS_ITERS):
+        new = {}
+        for t, gl in games.items():
+            sos = sum(ratings.get(opp, 0.0) for opp, _ in gl) / len(gl)
+            new[t] = avg_margin[t] + sos
+        # Re-center on zero so ratings stay interpretable as "vs average team".
+        mean_r = sum(new.values()) / len(new)
+        ratings = {t: r - mean_r for t, r in new.items()}
+    return ratings, {t: len(gl) for t, gl in games.items()}
+
+
+_ratings_cache = {"key": None, "value": None}
+
+
+def team_ratings(schedule_rows=None, season=None):
+    """Opponent-adjusted team strength (points vs an average team), computed
+    from results and blended with last season's rating as a prior early in the
+    year -- so it's meaningful in Week 1 and sharpens every week as games come
+    in (no retrain needed). This is the strength-of-schedule backbone: because
+    a rating already accounts for who you played, harder schedules stop
+    flattering weak teams and stop punishing strong ones.
+    """
+    schedule_rows = schedule_rows if schedule_rows is not None else fetch_schedule_rows()
+    season = season or current_season()
+    key = (id(schedule_rows), len(schedule_rows), season)
+    if _ratings_cache["key"] == key:
+        return _ratings_cache["value"]
+
+    cur, games_played = _srs_ratings(schedule_rows, {season})
+    prior, _ = _srs_ratings(schedule_rows, {str(int(season) - 1)})
+
+    out = {}
+    for team in set(cur) | set(prior):
+        n = games_played.get(team, 0)
+        cur_r = cur.get(team, 0.0)
+        prior_r = prior.get(team, 0.0)
+        # Shrink toward the prior until the team has a real sample this year.
+        w = min(n, RATING_PRIOR_GAMES) / RATING_PRIOR_GAMES
+        out[team] = w * cur_r + (1 - w) * prior_r
+    _ratings_cache.update(key=key, value=out)
+    return out
+
+
+def rating_gap(home, away, schedule_rows=None):
+    """Home team's projected point edge before the game model: rating gap plus
+    home-field advantage. Used as the game model's anchor and its Week-1 fallback."""
+    ratings = team_ratings(schedule_rows)
+    return (ratings.get(normalize_team(home), 0.0)
+            - ratings.get(normalize_team(away), 0.0) + HFA_POINTS)
+
+
+def team_form(schedule_rows, team, season=None):
+    """Season-to-date + rolling scoring/allowed/win form for a team this season,
+    mirroring the NBA game model's team feature block (schedule-derived)."""
+    season = season or current_season()
+    results = completed_team_games(schedule_rows, team, seasons={season})
+    n = len(results)
+    recent, last5 = results[-10:], results[-5:]
+    ppg = _avg(sum(r["scored"] for r in results), n)
+    papg = _avg(sum(r["allowed"] for r in results), n)
+    return {
+        "season_games": n,
+        "season_ppg": ppg,
+        "season_papg": papg,
+        "season_net": (ppg - papg) if (ppg is not None and papg is not None) else None,
+        "season_win_pct": _avg(sum(1.0 for r in results if r["won"]), n),
+        "l5_ppg": _avg(sum(r["scored"] for r in last5), len(last5)),
+        "l5_papg": _avg(sum(r["allowed"] for r in last5), len(last5)),
+        "l3_ppg": _avg(sum(r["scored"] for r in results[-3:]), len(results[-3:])),
+    }
+
+
+def days_rest(schedule_rows, team, game_date, cap=14):
+    """Days since a team's previous completed game (capped), or None."""
+    gd = parse_date(game_date) if not isinstance(game_date, date) else game_date
+    results = completed_team_games(schedule_rows, team)
+    if not results or gd is None or results[-1]["date"] is None:
+        return None
+    return min((gd - results[-1]["date"]).days, cap)
+
+
+def strength_of_schedule(team, schedule_rows=None, season=None):
+    """A team's average opponent rating across its games this season -- both the
+    ones it has played and the ones still to come. Positive = a harder slate.
+    This is the "who has the harder season" read, straight off the ratings."""
+    schedule_rows = schedule_rows if schedule_rows is not None else fetch_schedule_rows()
+    season = season or current_season()
+    ratings = team_ratings(schedule_rows, season)
+    team_n = normalize_team(team)
+    played, remaining = [], []
+    for g in schedule_rows:
+        if (g.get("season_type") or "regular") not in RATED_SEASON_TYPES:
+            continue
+        if str(g.get("season")) != season:
+            continue
+        home, away = normalize_team(g.get("home_team")), normalize_team(g.get("away_team"))
+        if team_n == home:
+            opp = away
+        elif team_n == away:
+            opp = home
+        else:
+            continue
+        r = ratings.get(opp, 0.0)
+        (played if g.get("status") == "completed" else remaining).append(r)
+    allg = played + remaining
+    return {
+        "played_sos": round(sum(played) / len(played), 2) if played else None,
+        "remaining_sos": round(sum(remaining) / len(remaining), 2) if remaining else None,
+        "full_sos": round(sum(allg) / len(allg), 2) if allg else None,
+        "games_remaining": len(remaining),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Injuries (most-recent status per player, like NBA's injury_status)
+# ---------------------------------------------------------------------------
+def injury_status(player_id):
+    """The most recent injury row for a player, or None. Tolerates a missing
+    table so a fresh setup never errors."""
+    try:
+        res = (
+            supabase.table(INJURIES_TABLE)
+            .select("status,reason,game_date")
+            .eq("player_id", player_id)
+            .order("game_date", desc=True)
+            .limit(1)
+            .execute()
+        )
+        rows = res.data or []
+        return rows[0] if rows else None
+    except Exception:  # noqa: BLE001 - table missing / RLS => no status
+        return None
