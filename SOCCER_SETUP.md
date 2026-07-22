@@ -1,3 +1,14 @@
+> **Retired after the 2026 World Cup.** The soccer engines, data and UI are kept
+> in the repo but are no longer wired into the live app: the ⚽ tab is hidden
+> (NFL leads now), the soccer pull scripts (`20`/`21`/`24`) are out of the
+> nightly `refresh.py`, and `daily_picks.warm()` no longer builds the soccer
+> board at startup. Nothing is deleted — to bring it back for the next
+> tournament, restore the `⚽ World Cup` sport tab in `frontend/src/App.jsx`,
+> re-add steps 20/21/24 to `refresh.py`'s `PIPELINE` (and the soccer clause to
+> its gate), and add `"soccer"` back to `daily_picks.warm()`. The `/api/soccer/*`
+> endpoints and the daily board still work on demand in the meantime. The
+> original setup guide follows.
+
 # Soccer (World Cup 2026) — setup
 
 The soccer side mirrors the NBA side: pull scripts load Supabase, engines
