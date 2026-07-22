@@ -17,6 +17,9 @@ import {
   projectBatch,
   fetchUpcomingNflGames,
   searchNflPlayers,
+  fetchNflStats,
+  projectNflStat,
+  projectNflGame,
 } from "./api.js";
 
 // ===========================================================================
@@ -136,7 +139,43 @@ const STAT_LABELS = {
   pa: "Pts + Ast",
   ra: "Reb + Ast",
   stocks: "Steals + Blocks",
+  // NFL markets (merged here so the shared cards render football stats too).
+  pass_yds: "Passing Yards",
+  pass_att: "Pass Attempts",
+  completions: "Completions",
+  pass_td: "Passing TDs",
+  interceptions: "Interceptions",
+  rush_yds: "Rushing Yards",
+  rush_att: "Carries",
+  rush_td: "Rushing TDs",
+  rec_yds: "Receiving Yards",
+  receptions: "Receptions",
+  targets: "Targets",
+  rec_td: "Receiving TDs",
+  pass_rush_yds: "Pass + Rush Yards",
+  rush_rec_yds: "Rush + Rec Yards",
+  any_td: "Anytime TD",
+  total_td: "Total TDs",
 };
+
+// NFL props dropdown order: passing, then rushing, then receiving, then combos.
+const NFL_STAT_ORDER = [
+  "pass_yds", "pass_td", "pass_att", "completions", "interceptions",
+  "rush_yds", "rush_att", "rush_td",
+  "rec_yds", "receptions", "targets", "rec_td",
+  "pass_rush_yds", "rush_rec_yds", "any_td", "total_td",
+];
+
+function sortNflStats(stats) {
+  return [...stats].sort((a, b) => {
+    const ia = NFL_STAT_ORDER.indexOf(a);
+    const ib = NFL_STAT_ORDER.indexOf(b);
+    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+  });
+}
+
+// Team nickname for compact win-bar labels ("Kansas City Chiefs" -> "Chiefs").
+const nflShort = (name) => (name ? String(name).split(" ").slice(-1)[0] : name);
 
 // Dropdown order: scoring first, then shooting volume, boards/playmaking,
 // defense/misc, then combos. Anything the API adds later lands at the end.
@@ -363,7 +402,9 @@ function PlayerProjections({
     setAdded({});
     fetchPlayerProjections({
       player: player.player_name,
-      stats: sport === "soccer" ? SOCCER_PROJ_STATS : PROJ_STATS,
+      // NFL defaults are position-aware server-side, so we send no fixed list.
+      stats:
+        sport === "soccer" ? SOCCER_PROJ_STATS : sport === "nfl" ? undefined : PROJ_STATS,
       opponent,
       location,
       gameType,
@@ -490,7 +531,10 @@ function RosterPlayerRow({ p, opponent, addProp, sport = "nba" }) {
     sport === "soccer"
       ? { val: p.ga_per90 != null ? `${p.ga_per90}` : "–", note: "G+A/90 · tap" }
       : sport === "nfl"
-      ? { val: p.position || "–", note: "tap for info" }
+      ? {
+          val: p.recent_yds ? `${p.recent_yds}` : p.position || "–",
+          note: p.recent_yds ? "yds/g · tap" : "tap for props",
+        }
       : { val: p.ppg != null ? `${p.ppg}` : "–", note: p.ppg != null ? "ppg · tap" : "tap for props" };
 
   return (
@@ -512,16 +556,7 @@ function RosterPlayerRow({ p, opponent, addProp, sport = "nba" }) {
           <span className="pick-prob">{stat.note}</span>
         </span>
       </button>
-      {open && sport === "nfl" && (
-        <div className="pick-detail">
-          <div className="note nfl-note">
-            {p.player_name} · {p.team}
-            {p.position ? ` · ${p.position}` : ""}. Player props aren't live
-            yet for the NFL — check back once the projection model lands.
-          </div>
-        </div>
-      )}
-      {open && sport !== "nfl" && (
+      {open && (
         <div className="pick-detail">
           <PlayerProjections
             player={player}
@@ -548,9 +583,7 @@ function RosterView({ roster, addProp, sport = "nba" }) {
             ? `${withFlag(roster.away_team)} ${sep} ${withFlag(roster.home_team)}`
             : `${roster.away_team} ${sep} ${roster.home_team}`}
         </label>
-        <span className="muted">
-          {sport === "nfl" ? "roster directory" : "tap any player for the model's read"}
-        </span>
+        <span className="muted">tap any player for the model's read</span>
       </div>
       {roster.teams.map((t) => (
         <div className="roster-team" key={t.abbr}>
@@ -1174,7 +1207,8 @@ function GameBoard({ sport }) {
   useEffect(() => setOpen(-1), [sport]);
 
   const games = (data && data.games) || [];
-  const GameCard = sport === "soccer" ? SoccerGameCard : GameResultCard;
+  const GameCard =
+    sport === "soccer" ? SoccerGameCard : sport === "nfl" ? NflGameCard : GameResultCard;
 
   return (
     <div className="card picks">
@@ -1808,140 +1842,328 @@ function SoccerPropsView({ addProp }) {
 }
 
 // ===========================================================================
-// NFL — schedule now, projections as the pipeline lands (see NFL_SETUP.md)
+// NFL — game outcomes (win/tie/loss, spread, total, team TDs) + player props
 // ===========================================================================
-// Search any player in the roster directory; shows team/position since
-// there's no projection engine yet (that's the next NFL pipeline stage).
-function NflPlayerLookup() {
-  const [player, setPlayer] = useState(null);
+const nflWeekLabel = (g) => {
+  if (!g) return "";
+  const type =
+    g.season_type === "preseason"
+      ? "Preseason"
+      : g.season_type === "playoffs"
+      ? "Playoffs"
+      : "";
+  return [type, g.week != null ? `Week ${g.week}` : ""].filter(Boolean).join(" · ");
+};
 
+// Home / Tie / Away probability bar. Ties are tiny in the NFL, so the middle
+// segment usually barely shows — but it's a real outcome, so it's here.
+function NflWinBar({ r }) {
+  const homePct = Math.round(r.p_home_win * 100);
+  const tiePct = Math.round((r.p_tie || 0) * 100);
+  const awayPct = Math.max(0, 100 - homePct - tiePct);
   return (
-    <div className="card controls">
-      <div className="picks-head">
-        <label>🔎 Player lookup</label>
-        <span className="muted">roster directory</span>
+    <div className="conf-bar">
+      <div className="conf-bar-fill over" style={{ width: `${homePct}%` }}>
+        {homePct >= 18 && <span>{nflShort(r.home_team)} {homePct}%</span>}
       </div>
-      <PlayerSearch
-        selected={player}
-        onSelect={setPlayer}
-        searchFn={searchNflPlayers}
-        sport="nfl"
-      />
-      {player && (
-        <div className="note nfl-note">
-          {player.player_name}
-          {player.team ? ` · ${player.team}` : ""}
-          {player.position ? ` · ${player.position}` : ""}. Props and
-          projections aren't live yet for the NFL — check back once the
-          model lands.
+      {tiePct > 0 && (
+        <div className="conf-bar-fill draw" style={{ width: `${tiePct}%` }}>
+          {tiePct >= 10 && <span>Tie {tiePct}%</span>}
         </div>
+      )}
+      <div className="conf-bar-fill under" style={{ width: `${awayPct}%` }}>
+        {awayPct >= 18 && <span>{nflShort(r.away_team)} {awayPct}%</span>}
+      </div>
+    </div>
+  );
+}
+
+function NflGameCard({ r, collapseWhy }) {
+  const recClass = recClassFor(r.confidence_label);
+  return (
+    <div className="card result">
+      <div className="result-head">
+        <div>
+          <h2>
+            {r.away_team} @ {r.home_team}
+          </h2>
+          <div className="muted">
+            {dayLabel(r.game_date)}
+            {r.season_type === "playoffs" ? " · Playoffs" : ""}
+          </div>
+        </div>
+        <span className={`badge ${r.method === "model" ? "model" : "heuristic"}`}>
+          {r.method === "model" ? "trained model" : "ratings model"}
+        </span>
+      </div>
+
+      <div className="proj">
+        <div className="proj-num game-score">
+          {r.projected_home_score}
+          <span className="score-sep"> – </span>
+          {r.projected_away_score}
+        </div>
+        <div className="muted">
+          projected score ({nflShort(r.home_team)} home · {nflShort(r.away_team)} away)
+        </div>
+      </div>
+
+      <NflWinBar r={r} />
+      <div className={`recommendation ${recClass}`}>
+        {r.predicted_winner} wins
+        <span className="conf-label">
+          {Math.round(Math.max(r.p_home_win, r.p_away_win) * 100)}% · {r.confidence_label}
+        </span>
+      </div>
+
+      <div className="splits">
+        <div>
+          <span className="muted">Margin ({nflShort(r.home_team)})</span>
+          <b>
+            {r.projected_margin > 0 ? "+" : ""}
+            {r.projected_margin} ± {r.sigma_margin}
+          </b>
+        </div>
+        <div>
+          <span className="muted">Total</span>
+          <b>
+            {r.projected_total} ± {r.sigma_total}
+          </b>
+        </div>
+        <div>
+          <span className="muted">Team TDs</span>
+          <b>
+            {r.projected_home_td} – {r.projected_away_td}
+          </b>
+        </div>
+      </div>
+
+      {collapseWhy ? (
+        <CollapsibleFactors factors={r.factors} />
+      ) : (
+        <FactorList title="Why this call" factors={r.factors} />
       )}
     </div>
   );
 }
 
-function NflView() {
+function NflGameView({ addProp }) {
   const [games, setGames] = useState(null);
-  const [error, setError] = useState("");
   const [selected, setSelected] = useState(null);
+  const [result, setResult] = useState(null);
   const [roster, setRoster] = useState(null);
-  const [rosterError, setRosterError] = useState("");
-  const [rosterLoading, setRosterLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     fetchUpcomingNflGames(60)
       .then(setGames)
-      .catch((e) => {
-        setGames([]);
-        setError(e.message);
-      });
+      .catch(() => setGames([]));
   }, []);
 
-  const weekLabel = (g) => {
-    const type =
-      g.season_type === "preseason"
-        ? "Preseason"
-        : g.season_type === "playoffs"
-        ? "Playoffs"
-        : "";
-    return [type, g.week != null ? `Week ${g.week}` : ""]
-      .filter(Boolean)
-      .join(" · ");
-  };
-
-  const openRoster = (g) => {
+  const run = async (g) => {
     setSelected(g.game_id);
+    setError("");
+    setLoading(true);
+    setResult(null);
     setRoster(null);
-    setRosterError("");
-    setRosterLoading(true);
     fetchRoster({ home: g.home_team, away: g.away_team, sport: "nfl" })
       .then(setRoster)
-      .catch((e) => setRosterError(e.message))
-      .finally(() => setRosterLoading(false));
+      .catch(() => setRoster(null));
+    try {
+      const r = await projectNflGame({
+        home: g.home_team,
+        away: g.away_team,
+        date: g.game_date,
+        gameId: g.game_id,
+      });
+      setResult(r);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <>
       <div className="card controls">
-        <div className="picks-head">
-          <label>🏈 Upcoming games</label>
-          <span className="muted">2026 season</span>
-        </div>
-        <div className="note nfl-note">
-          NFL is new here — the schedule and rosters are live, and game
-          predictions + player props are in the works. Tap a game to see
-          both rosters.
-        </div>
-        {games === null && <Skeleton rows={5} />}
-        {error && <div className="muted">Schedule unavailable: {error}</div>}
-        {games !== null && !error && games.length === 0 && (
-          <div className="muted">
-            No NFL games in the next 60 days — the season kicks off in
-            September. The slate will appear here as it gets close.
-          </div>
-        )}
-        <div className="game-list">
-          {groupByDate(games || [], "game_date").map((day) => (
-            <div className="game-day" key={day.date}>
-              <div className="game-day-head">
-                {dayLabel(day.date)}
-                {weekLabel(day.games[0]) && (
-                  <span className="stage-label">{weekLabel(day.games[0])}</span>
-                )}
-              </div>
-              {day.games.map((g) => (
-                <button
-                  key={g.game_id}
-                  className={`game-pick ${selected === g.game_id ? "active" : ""}`}
-                  onClick={() => openRoster(g)}
-                >
-                  <span className="game-pick-main">
-                    <span className="game-teams">
-                      {g.away_team} <span className="vs-sep">@</span>{" "}
-                      {g.home_team}
-                    </span>
-                    <span className="muted">
-                      {fmtKickoff(g.game_time) || "Kickoff TBD"}
-                    </span>
-                  </span>
-                </button>
-              ))}
+        <div className="field">
+          <label>Upcoming games</label>
+          {games === null && <Skeleton rows={5} />}
+          {games !== null && games.length === 0 && (
+            <div className="muted">
+              No NFL games in the next 60 days — the slate appears here as the
+              season gets close. Run 30_nfl_schedule.py to load it.
             </div>
-          ))}
+          )}
+          <div className="game-list">
+            {groupByDate(games || [], "game_date").map((day) => (
+              <div className="game-day" key={day.date}>
+                <div className="game-day-head">
+                  {dayLabel(day.date)}
+                  {nflWeekLabel(day.games[0]) && (
+                    <span className="stage-label">{nflWeekLabel(day.games[0])}</span>
+                  )}
+                </div>
+                {day.games.map((g) => (
+                  <button
+                    key={g.game_id}
+                    className={`game-pick ${selected === g.game_id ? "active" : ""}`}
+                    onClick={() => run(g)}
+                    disabled={loading}
+                  >
+                    <span className="game-pick-main">
+                      <span className="game-teams">
+                        {g.away_team} <span className="vs-sep">@</span> {g.home_team}
+                      </span>
+                      <span className="muted">
+                        {fmtKickoff(g.game_time) || "Kickoff TBD"}
+                      </span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ))}
+          </div>
         </div>
-        {rosterLoading && (
+        {loading && (
           <div className="muted crunching">
-            <span className="spinner" /> Loading rosters…
+            <span className="spinner" /> Running the game model…
           </div>
         )}
-        {rosterError && (
-          <div className="muted">Rosters unavailable: {rosterError}</div>
-        )}
+        {error && <div className="error">{error}</div>}
       </div>
 
-      {roster && <RosterView roster={roster} sport="nfl" />}
+      {result && (
+        <ScrollIntoView>
+          <NflGameCard r={result} />
+        </ScrollIntoView>
+      )}
 
-      <NflPlayerLookup />
+      <RosterView roster={roster} addProp={addProp} sport="nfl" />
+    </>
+  );
+}
+
+function NflPropsView({ addProp }) {
+  const [stats, setStats] = useState([]);
+  const [player, setPlayer] = useState(null);
+  const [stat, setStat] = useState("rush_yds");
+  const [line, setLine] = useState("");
+  const [opponent, setOpponent] = useState("");
+  const [location, setLocation] = useState("auto");
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    fetchNflStats()
+      .then((s) => setStats(sortNflStats(s)))
+      .catch(() => {});
+  }, []);
+
+  const run = async () => {
+    if (!player) {
+      setError("Pick a player first.");
+      return;
+    }
+    setError("");
+    setLoading(true);
+    setResult(null);
+    try {
+      const r = await projectNflStat({
+        player: player.player_name,
+        stat,
+        line,
+        opponent: opponent.trim(),
+        location,
+        gameType: "auto",
+      });
+      setResult(r);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="card controls">
+        <PlayerSearch
+          selected={player}
+          onSelect={setPlayer}
+          searchFn={searchNflPlayers}
+          sport="nfl"
+        />
+
+        {player && (
+          <PlayerProjections
+            player={player}
+            opponent={opponent.trim() || undefined}
+            location={location}
+            onAddProp={addProp}
+            sport="nfl"
+          />
+        )}
+
+        <div className="row">
+          <div className="field">
+            <label>Stat</label>
+            <select value={stat} onChange={(e) => setStat(e.target.value)}>
+              {stats.map((s) => (
+                <option key={s} value={s}>
+                  {STAT_LABELS[s] || s}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label>Your line</label>
+            <input
+              type="number"
+              step="0.5"
+              placeholder="e.g. 74.5"
+              value={line}
+              onChange={(e) => setLine(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="row">
+          <div className="field">
+            <label>Opponent (optional)</label>
+            <input
+              type="text"
+              placeholder="auto-detect from schedule"
+              value={opponent}
+              onChange={(e) => setOpponent(e.target.value)}
+            />
+          </div>
+          <div className="field">
+            <label>Location</label>
+            <select value={location} onChange={(e) => setLocation(e.target.value)}>
+              <option value="auto">Auto</option>
+              <option value="home">Home</option>
+              <option value="away">Away</option>
+            </select>
+          </div>
+        </div>
+
+        <button className="go" onClick={run} disabled={loading}>
+          {loading ? "Crunching…" : "Get Confidence"}
+        </button>
+        {error && <div className="error">{error}</div>}
+      </div>
+
+      {result && (
+        <ScrollIntoView>
+          <ResultCard r={result} />
+        </ScrollIntoView>
+      )}
+
+      <DailyPicks sport="nfl" />
     </>
   );
 }
@@ -2112,8 +2334,8 @@ function SlipAnalyzer() {
     <>
       <div className="card controls">
         <p className="muted">
-          Upload a screenshot of your bet slip or parlay. We grade NBA &amp; World
-          Cup player props with our own model and use Gemini for anything else,
+          Upload a screenshot of your bet slip or parlay. We grade NFL &amp; NBA
+          player props with our own model and use Gemini for anything else,
           then flag the legs most likely to bust it.
         </p>
         <label
@@ -2157,9 +2379,9 @@ function SlipAnalyzer() {
 }
 
 export default function App() {
-  // The World Cup is live right now (knockout rounds) and the NBA is in its
-  // offseason, so soccer leads.
-  const [sport, setSport] = useState("soccer");
+  // The World Cup is over, so NFL leads; the ⚽ tab is retired (the code is kept
+  // for a future tournament — see SOCCER_SETUP.md).
+  const [sport, setSport] = useState("nfl");
   const [mode, setMode] = useState("game");
   const [stats, setStats] = useState([]);
   const [player, setPlayer] = useState(null);
@@ -2232,22 +2454,16 @@ export default function App() {
       <nav className="topnav">
         <div className="tabs sport-tabs">
           <button
-            className={sport === "soccer" ? "tab active" : "tab"}
-            onClick={() => setSport("soccer")}
+            className={sport === "nfl" ? "tab active" : "tab"}
+            onClick={() => setSport("nfl")}
           >
-            ⚽ World Cup
+            🏈 NFL
           </button>
           <button
             className={sport === "nba" ? "tab active" : "tab"}
             onClick={() => setSport("nba")}
           >
             🏀 NBA
-          </button>
-          <button
-            className={sport === "nfl" ? "tab active" : "tab"}
-            onClick={() => setSport("nfl")}
-          >
-            🏈 NFL
           </button>
           <button
             className={sport === "slip" ? "tab active" : "tab"}
@@ -2257,7 +2473,7 @@ export default function App() {
           </button>
         </div>
 
-        {sport !== "slip" && sport !== "nfl" && (
+        {sport !== "slip" && (
           <div className="tabs mode-tabs">
             <button
               className={mode === "game" ? "tab active" : "tab"}
@@ -2291,10 +2507,19 @@ export default function App() {
       </nav>
 
       {sport === "slip" && <SlipAnalyzer />}
-      {sport === "nfl" && <NflView />}
 
-      {sport !== "slip" && sport !== "nfl" && mode === "bets" && (
-        <GameBoard sport={sport} />
+      {sport !== "slip" && mode === "bets" && <GameBoard sport={sport} />}
+
+      {sport === "nfl" && mode === "game" && <NflGameView addProp={addProp} />}
+      {sport === "nfl" && mode === "props" && <NflPropsView addProp={addProp} />}
+      {sport === "nfl" && mode === "multi" && (
+        <MultiPropView
+          slip={slip}
+          addProp={addProp}
+          removeProp={removeProp}
+          clearSlip={clearSlip}
+          sport="nfl"
+        />
       )}
 
       {sport === "soccer" && mode === "game" && (

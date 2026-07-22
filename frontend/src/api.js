@@ -73,12 +73,16 @@ export function fetchPlayerProjections({
   }
   params.set("location", location);
   params.set("game_type", gameType);
-  return getJSON(`/api/player/projections?${params.toString()}`);
+  const base = sport === "nfl" ? "/api/nfl/player/projections" : "/api/player/projections";
+  return getJSON(`${base}?${params.toString()}`);
 }
 
 // Grade a hand-built list of props and score them as a parlay.
 export function projectBatch(props, sport = "nba") {
-  const url = sport === "soccer" ? "/api/soccer/project-batch" : "/api/project-batch";
+  const url =
+    sport === "soccer" ? "/api/soccer/project-batch" :
+    sport === "nfl" ? "/api/nfl/project-batch" :
+    "/api/project-batch";
   return fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -90,7 +94,7 @@ export function projectBatch(props, sport = "nba") {
   });
 }
 
-// ---- NFL (schedule + roster directory; projections land with the pipeline) -
+// ---- NFL --------------------------------------------------------------------
 
 export function fetchUpcomingNflGames(days = 30) {
   return getJSON(`/api/nfl/games?days=${days}`).then((d) => d.games);
@@ -100,6 +104,24 @@ export function searchNflPlayers(q) {
   return getJSON(`/api/nfl/players?q=${encodeURIComponent(q)}`).then(
     (d) => d.players
   );
+}
+
+export function fetchNflStats() {
+  return getJSON("/api/nfl/stats").then((d) => d.stats);
+}
+
+export function projectNflStat({ player, stat, line, opponent, location, gameType }) {
+  const params = new URLSearchParams({ player, stat, location, game_type: gameType });
+  if (line !== "" && line != null) params.set("line", line);
+  if (opponent) params.set("opponent", opponent);
+  return getJSON(`/api/nfl/project?${params.toString()}`);
+}
+
+export function projectNflGame({ home, away, date, gameId }) {
+  const params = new URLSearchParams({ home, away });
+  if (date) params.set("date", date);
+  if (gameId) params.set("game_id", gameId);
+  return getJSON(`/api/nfl/game?${params.toString()}`);
 }
 
 // ---- Bet-slip analyzer -----------------------------------------------------
