@@ -13,9 +13,11 @@ it. It's being built in stages:
 | 4 | Player-prop projections (pass/rush/rec yards, TDs, receptions) | planned |
 
 The frontend NFL tab shows the upcoming schedule and lets you tap a game to
-see both rosters, or search any player by name — but there are no stats or
-projections behind them yet (that's stage 2b onward). Tapping a player shows
-a "coming soon" note instead of a projection.
+see both rosters, or search any player by name. Tapping a player shows this
+week's projection (Sleeper's projected stat line, fantasy points in PPR /
+half / standard, anytime-TD chance) adjusted for the game's Vegas lines —
+served by `/api/fantasy/player` (see FANTASY_SETUP.md), which needs no
+Supabase tables. The in-house NFL game/prop models are still stage 3–4.
 
 ## 1. Supabase table (run in the SQL editor)
 
