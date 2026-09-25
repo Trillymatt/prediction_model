@@ -18,6 +18,7 @@ import {
   fetchUpcomingNflGames,
   searchNflPlayers,
 } from "./api.js";
+import FantasyView from "./Fantasy.jsx";
 
 // ===========================================================================
 // World Cup helpers: flags, knockout-round labels, kickoff formatting
@@ -2250,6 +2251,12 @@ export default function App() {
             🏈 NFL
           </button>
           <button
+            className={sport === "fantasy" ? "tab active" : "tab"}
+            onClick={() => setSport("fantasy")}
+          >
+            🏆 Fantasy
+          </button>
+          <button
             className={sport === "slip" ? "tab active" : "tab"}
             onClick={() => setSport("slip")}
           >
@@ -2257,7 +2264,7 @@ export default function App() {
           </button>
         </div>
 
-        {sport !== "slip" && sport !== "nfl" && (
+        {sport !== "slip" && sport !== "nfl" && sport !== "fantasy" && (
           <div className="tabs mode-tabs">
             <button
               className={mode === "game" ? "tab active" : "tab"}
@@ -2292,8 +2299,9 @@ export default function App() {
 
       {sport === "slip" && <SlipAnalyzer />}
       {sport === "nfl" && <NflView />}
+      {sport === "fantasy" && <FantasyView />}
 
-      {sport !== "slip" && sport !== "nfl" && mode === "bets" && (
+      {sport !== "slip" && sport !== "nfl" && sport !== "fantasy" && mode === "bets" && (
         <GameBoard sport={sport} />
       )}
 

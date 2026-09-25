@@ -15,3 +15,6 @@ frontend/dist/
 
 # Logs
 *.log
+
+# Fantasy advisor cache (Sleeper player DB, refreshed daily)
+.cache/

@@ -147,3 +147,56 @@ export function projectSoccerGame({ home, away, date, matchId }) {
   if (matchId) params.set("match_id", matchId);
   return getJSON(`/api/soccer/game?${params.toString()}`);
 }
+
+// ---- Fantasy advisor (Sleeper / ESPN leagues, Vegas, parlays) --------------
+
+function postJSON(url, body) {
+  return fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  }).then(async (res) => {
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || `Request failed (${res.status})`);
+    return data;
+  });
+}
+
+export function fetchSleeperLeagues(username, season) {
+  const params = new URLSearchParams({ username });
+  if (season) params.set("season", season);
+  return getJSON(`/api/fantasy/sleeper/leagues?${params.toString()}`);
+}
+
+// conn = {platform, league_id, season?, espn_s2?, swid?}
+export function connectFantasyLeague(conn) {
+  return postJSON("/api/fantasy/league", conn);
+}
+
+export function analyzeFantasyTeam(conn, teamId, week) {
+  return postJSON("/api/fantasy/analyze", { ...conn, team_id: teamId, week: week || undefined });
+}
+
+export function evaluateFantasyTrade(conn, teamId, partnerId, give, get) {
+  return postJSON("/api/fantasy/trade", {
+    ...conn, team_id: teamId, partner_id: partnerId, give, get,
+  });
+}
+
+export function fetchFantasyOdds(week) {
+  return getJSON(`/api/fantasy/odds${week ? `?week=${week}` : ""}`);
+}
+
+export function searchFantasyPlayers(q) {
+  return getJSON(`/api/fantasy/players?q=${encodeURIComponent(q)}`).then((d) => d.players);
+}
+
+export function gradeFantasyParlay(legs) {
+  return postJSON("/api/fantasy/parlay", { legs });
+}
+
+export function fetchFantasyProps(eventId) {
+  return getJSON(`/api/fantasy/props?event_id=${encodeURIComponent(eventId)}`).then(
+    (d) => d.props
+  );
+}

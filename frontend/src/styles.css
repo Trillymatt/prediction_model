@@ -1161,3 +1161,293 @@ select:focus {
   color: #ff7b72;
   background: var(--border);
 }
+
+/* ---- Fantasy advisor ---- */
+.ff-subtabs .tab {
+  padding: 9px 6px;
+  font-size: 13px;
+  border-radius: 8px;
+}
+.ff-scroll {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.ff-scroll::-webkit-scrollbar {
+  display: none;
+}
+.ff-scroll .tab {
+  flex: 1 0 auto;
+}
+.ff-h {
+  margin: 0 0 8px;
+  font-size: 17px;
+}
+.ff-h4 {
+  margin: 18px 0 6px;
+  font-size: 14px;
+  color: var(--muted);
+}
+.ff-hint {
+  margin: 0 0 12px;
+}
+.ff-small {
+  font-size: 12px;
+  line-height: 1.45;
+}
+.ff-narrow {
+  flex: 0 0 90px;
+}
+.ff-secondary {
+  background: var(--card-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.ff-link {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 6px;
+}
+.ff-link:disabled {
+  opacity: 0.5;
+}
+.ff-league-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 16px;
+}
+.ff-list {
+  display: flex;
+  flex-direction: column;
+}
+.ff-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  min-width: 0;
+}
+.ff-row:last-child {
+  border-bottom: none;
+}
+.ff-grow {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.ff-num {
+  text-align: right;
+  white-space: nowrap;
+}
+.ff-slot {
+  flex: 0 0 44px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  text-align: center;
+  padding: 3px 0;
+  background: var(--card-2);
+  border-radius: 6px;
+}
+.ff-inj {
+  margin-left: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #ff9b94;
+}
+.ff-callout {
+  margin: 8px 0 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(240, 136, 62, 0.12);
+  border: 1px solid rgba(240, 136, 62, 0.4);
+  font-size: 14px;
+}
+.ff-callout.ok {
+  background: rgba(46, 160, 67, 0.12);
+  border-color: rgba(46, 160, 67, 0.4);
+}
+.ff-callout ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+.ff-trade {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card-2);
+}
+.ff-trade-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+.ff-verdict {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--lean);
+  white-space: nowrap;
+}
+.ff-verdict.good {
+  color: var(--over);
+}
+.ff-verdict.bad {
+  color: var(--under);
+}
+.ff-trade-sides {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  font-size: 14px;
+}
+.ff-trade-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: 10px 0 6px;
+  font-size: 13px;
+}
+.ff-pitch {
+  font-size: 13px;
+  margin: 6px 0;
+  line-height: 1.45;
+}
+.ff-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+.ff-pick label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.ff-pick label.on {
+  background: rgba(240, 136, 62, 0.15);
+}
+.ff-pick .ff-player {
+  flex: 1;
+  min-width: 0;
+}
+.ff-bs {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 6px;
+}
+.ff-reasons {
+  margin: 0 0 6px;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.ff-reasons.buy li::marker {
+  color: var(--over);
+}
+.ff-reasons.sell li::marker {
+  color: var(--under);
+}
+.ff-needs {
+  overflow-x: auto;
+}
+.ff-needs-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.ff-needs-row.head {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.ff-needs-row.mine {
+  background: rgba(240, 136, 62, 0.08);
+}
+.ff-needs-row .ff-num {
+  flex: 0 0 52px;
+}
+.ff-cell {
+  flex: 0 0 34px;
+  text-align: center;
+  font-weight: 700;
+  padding: 4px 0;
+  border-radius: 6px;
+}
+.grade-need {
+  background: rgba(207, 59, 59, 0.22);
+  color: #ff9b94;
+}
+.grade-strong {
+  background: rgba(46, 160, 67, 0.2);
+  color: #7ee787;
+}
+.grade-ok {
+  color: var(--muted);
+}
+.ff-game {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.ff-game .ff-row {
+  border-bottom: none;
+  padding: 0 0 6px;
+}
+.ff-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ff-chips button {
+  padding: 6px 9px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--card-2);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  cursor: pointer;
+}
+.ff-chips button:hover {
+  border-color: var(--accent);
+}
+.ff-chips .ff-chip-accent {
+  color: var(--accent);
+}
+.ff-search {
+  position: relative;
+}
+.ff-pos {
+  color: var(--over);
+}
+.ff-neg {
+  color: var(--under);
+}
+.ff-parlay {
+  margin-top: 14px;
+}
+.ff-corr {
+  margin-top: 6px;
+}
+.ff-corr.negative {
+  color: #ff9b94;
+}
+.ff-legform .row {
+  flex-wrap: wrap;
+}
+.ff-legform .field {
+  min-width: 90px;
+}
