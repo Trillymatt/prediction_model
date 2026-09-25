@@ -173,8 +173,15 @@ export function connectFantasyLeague(conn) {
   return postJSON("/api/fantasy/league", conn);
 }
 
-export function analyzeFantasyTeam(conn, teamId, week) {
-  return postJSON("/api/fantasy/analyze", { ...conn, team_id: teamId, week: week || undefined });
+// refresh=true re-pulls rosters from Sleeper/ESPN instead of the server's
+// 5-minute league cache (the report's ↻ button).
+export function analyzeFantasyTeam(conn, teamId, { week, refresh } = {}) {
+  return postJSON("/api/fantasy/analyze", {
+    ...conn,
+    team_id: teamId,
+    week: week || undefined,
+    refresh: refresh || undefined,
+  });
 }
 
 export function evaluateFantasyTrade(conn, teamId, partnerId, give, get) {
@@ -199,4 +206,12 @@ export function fetchFantasyProps(eventId) {
   return getJSON(`/api/fantasy/props?event_id=${encodeURIComponent(eventId)}`).then(
     (d) => d.props
   );
+}
+
+// This week's projection for one NFL player (the NFL tab's player taps).
+export function fetchNflPlayerOutlook({ name, team, position }) {
+  const params = new URLSearchParams({ name });
+  if (team) params.set("team", team);
+  if (position) params.set("position", position);
+  return getJSON(`/api/fantasy/player?${params.toString()}`);
 }

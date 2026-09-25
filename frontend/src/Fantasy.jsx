@@ -8,6 +8,7 @@ import {
   searchFantasyPlayers,
   gradeFantasyParlay,
   fetchFantasyProps,
+  fetchNflPlayerOutlook,
 } from "./api.js";
 
 // Remembers which league/team you picked (never ESPN cookies) so the report is
@@ -31,7 +32,8 @@ function saveLeague(v) {
 }
 
 const fmt = (x, d = 1) => (x == null ? "–" : Number(x).toFixed(d));
-const pct = (p) => (p == null ? "–" : `${Math.round(p * 100)}%`);
+const pct = (p) =>
+  p == null ? "–" : p > 0 && p < 0.005 ? "<1%" : p < 1 && p > 0.995 ? ">99%" : `${Math.round(p * 100)}%`;
 const signed = (x, d = 1) => (x == null ? "–" : `${x > 0 ? "+" : ""}${Number(x).toFixed(d)}`);
 const american = (o) => (o == null ? "–" : o > 0 ? `+${o}` : `${o}`);
 const spreadStr = (s) => (s == null ? "–" : s === 0 ? "PK" : s > 0 ? `+${s}` : `${s}`);
@@ -57,26 +59,29 @@ function ConnectLeague({ onConnected }) {
   const [platform, setPlatform] = useState("sleeper");
   const [username, setUsername] = useState("");
   const [leagues, setLeagues] = useState(null);
+  const [sleeperUserId, setSleeperUserId] = useState(null);
   const [leagueId, setLeagueId] = useState("");
   const [season, setSeason] = useState("");
   const [s2, setS2] = useState("");
   const [swid, setSwid] = useState("");
   const [showPrivate, setShowPrivate] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [finding, setFinding] = useState(false);
+  const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState("");
 
   const findLeagues = async () => {
     setError("");
-    setBusy(true);
+    setFinding(true);
     try {
       const r = await fetchSleeperLeagues(username.trim(), season.trim());
       setLeagues(r.leagues);
+      setSleeperUserId(r.user_id);
       if (r.leagues.length === 1) setLeagueId(r.leagues[0].league_id);
       if (!r.leagues.length) setError("No NFL leagues found for that user this season.");
     } catch (e) {
       setError(e.message);
     } finally {
-      setBusy(false);
+      setFinding(false);
     }
   };
 
@@ -92,16 +97,21 @@ function ConnectLeague({ onConnected }) {
       setError("Enter the numeric league ID.");
       return;
     }
-    setBusy(true);
+    if (conn.season && !/^20\d\d$/.test(conn.season)) {
+      setError("Season must be a year like 2026 (or leave it blank).");
+      return;
+    }
+    setConnecting(true);
     try {
       const league = await connectFantasyLeague(conn);
-      onConnected(conn, league, username.trim());
+      onConnected(conn, league, platform === "sleeper" ? { userId: sleeperUserId, username: username.trim() } : null);
     } catch (e) {
       setError(e.message);
     } finally {
-      setBusy(false);
+      setConnecting(false);
     }
   };
+  const busy = finding || connecting;
 
   return (
     <div className="card controls">
@@ -111,8 +121,11 @@ function ConnectLeague({ onConnected }) {
             key={p}
             className={platform === p ? "tab active" : "tab"}
             onClick={() => {
+              if (p === platform) return;
               setPlatform(p);
               setError("");
+              setLeagueId("");
+              setLeagues(null);
             }}
           >
             {p === "sleeper" ? "Sleeper" : "ESPN"}
@@ -134,7 +147,7 @@ function ConnectLeague({ onConnected }) {
             </div>
           </div>
           <button className="go ff-secondary" onClick={findLeagues} disabled={busy || !username.trim()}>
-            {busy && !leagues ? "Looking…" : "Find my leagues"}
+            {finding ? "Looking…" : "Find my leagues"}
           </button>
           {leagues && leagues.length > 0 && (
             <div className="field" style={{ marginTop: 14 }}>
@@ -202,7 +215,7 @@ function ConnectLeague({ onConnected }) {
       )}
 
       <button className="go" onClick={connect} disabled={busy || !leagueId.trim()}>
-        {busy && (leagues || platform === "espn") ? "Connecting…" : "Connect league"}
+        {connecting ? "Connecting…" : "Connect league"}
       </button>
       {error && <div className="error">{error}</div>}
     </div>
@@ -277,7 +290,12 @@ function LineupRow({ slot, r }) {
           <div className="muted ff-small">
             {r.opponent ? `${r.home ? "vs" : "@"} ${r.opponent}` : "no game"}
             {r.implied != null && ` · implied ${fmt(r.implied)} · ${spreadStr(r.spread)}`}
-            {r.notes && r.notes.length > 0 && ` · ${r.notes.filter((n) => !n.startsWith("team implied")).join(" · ")}`}
+            {(() => {
+              const extra = (r.notes || []).filter(
+                (n) => !n.startsWith("team implied") && n !== r.injury
+              );
+              return extra.length > 0 ? ` · ${extra.join(" · ")}` : "";
+            })()}
           </div>
         )}
       </div>
@@ -343,6 +361,24 @@ function TradeCard({ t, teamName }) {
   );
 }
 
+// Defined at module level (not inside TradeBuilder) so ticking a box doesn't
+// remount the list and throw away its scroll position.
+function TradePick({ players, chosen, onToggle }) {
+  return (
+    <div className="ff-pick">
+      {players
+        .filter((p) => !["K", "DEF"].includes(p.pos))
+        .map((p) => (
+          <label key={p.id} className={chosen.includes(p.id) ? "on" : ""}>
+            <input type="checkbox" checked={chosen.includes(p.id)} onChange={() => onToggle(p.id)} />
+            <PlayerTag p={p} />
+            <span className="muted ff-small">{fmt(p.ros_ppg)}</span>
+          </label>
+        ))}
+    </div>
+  );
+}
+
 function TradeBuilder({ conn, report }) {
   const myId = report.my_team.team_id;
   const partners = report.power_rankings.filter((t) => t.team_id !== myId);
@@ -358,8 +394,10 @@ function TradeBuilder({ conn, report }) {
     setResult(null);
   }, [partner]);
 
-  const toggle = (list, setList, id) =>
+  const toggle = (list, setList, id) => {
     setList(list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
+    setResult(null);
+  };
 
   const run = async () => {
     setError("");
@@ -372,20 +410,6 @@ function TradeBuilder({ conn, report }) {
       setBusy(false);
     }
   };
-
-  const Pick = ({ players, chosen, onToggle }) => (
-    <div className="ff-pick">
-      {players
-        .filter((p) => !["K", "DEF"].includes(p.pos))
-        .map((p) => (
-          <label key={p.id} className={chosen.includes(p.id) ? "on" : ""}>
-            <input type="checkbox" checked={chosen.includes(p.id)} onChange={() => onToggle(p.id)} />
-            <PlayerTag p={p} />
-            <span className="muted ff-small">{fmt(p.ros_ppg)}</span>
-          </label>
-        ))}
-    </div>
-  );
 
   return (
     <div className="card">
@@ -406,11 +430,11 @@ function TradeBuilder({ conn, report }) {
         <div className="ff-trade-sides">
           <div>
             <div className="muted ff-small">You give</div>
-            <Pick players={report.rosters[myId] || []} chosen={give} onToggle={(id) => toggle(give, setGive, id)} />
+            <TradePick players={report.rosters[myId] || []} chosen={give} onToggle={(id) => toggle(give, setGive, id)} />
           </div>
           <div>
             <div className="muted ff-small">You get</div>
-            <Pick players={report.rosters[partner] || []} chosen={get} onToggle={(id) => toggle(get, setGet, id)} />
+            <TradePick players={report.rosters[partner] || []} chosen={get} onToggle={(id) => toggle(get, setGet, id)} />
           </div>
         </div>
       )}
@@ -445,13 +469,8 @@ function Trades({ conn, report }) {
   );
 }
 
-function BuySell({ report }) {
-  const names = useMemo(
-    () => Object.fromEntries(report.power_rankings.map((t) => [t.team_id, t.name])),
-    [report]
-  );
-  const List = ({ rows, kind }) =>
-    rows.length === 0 ? (
+function BuySellList({ rows, kind, names }) {
+  return rows.length === 0 ? (
       <div className="note">Nothing stands out yet.</div>
     ) : (
       rows.map((r) => (
@@ -479,7 +498,14 @@ function BuySell({ report }) {
           </ul>
         </div>
       ))
-    );
+  );
+}
+
+function BuySell({ report }) {
+  const names = useMemo(
+    () => Object.fromEntries(report.power_rankings.map((t) => [t.team_id, t.name])),
+    [report]
+  );
   return (
     <>
       <div className="card">
@@ -487,12 +513,12 @@ function BuySell({ report }) {
         <p className="muted ff-hint">
           Volume without the points (yet). Usage predicts future scoring better than past points.
         </p>
-        <List rows={report.buy_sell.buy_low} kind="buy" />
+        <BuySellList rows={report.buy_sell.buy_low} kind="buy" names={names} />
       </div>
       <div className="card">
         <h3 className="ff-h">📈 Sell high</h3>
         <p className="muted ff-hint">Points outrunning their usage — cash in before it corrects. Yours first.</p>
-        <List rows={report.buy_sell.sell_high} kind="sell" />
+        <BuySellList rows={report.buy_sell.sell_high} kind="sell" names={names} />
       </div>
     </>
   );
@@ -645,15 +671,15 @@ function LeagueReport({ conn, league, teamId, onReset }) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const load = () => {
+  const load = (refresh = false) => {
     setLoading(true);
     setError("");
-    analyzeFantasyTeam(conn, teamId)
+    analyzeFantasyTeam(conn, teamId, { refresh })
       .then(setReport)
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   };
-  useEffect(load, [conn.platform, conn.league_id, teamId]);
+  useEffect(() => load(false), [conn.platform, conn.league_id, teamId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <>
@@ -665,8 +691,13 @@ function LeagueReport({ conn, league, teamId, onReset }) {
             {report && ` · Week ${report.league.week}`}
           </div>
         </div>
-        <button className="ff-link" onClick={load} disabled={loading}>
-          ↻
+        <button
+          className="ff-link"
+          onClick={() => load(true)}
+          disabled={loading}
+          title="Re-pull rosters, projections-to-date and lines"
+        >
+          {loading && report ? "…" : "↻"}
         </button>
         <button className="ff-link" onClick={onReset}>
           Switch
@@ -706,7 +737,7 @@ function LeagueReport({ conn, league, teamId, onReset }) {
 }
 
 function MyLeague() {
-  const saved = loadSaved();
+  const [saved] = useState(loadSaved);
   const [conn, setConn] = useState(saved ? saved.conn : null);
   const [league, setLeague] = useState(null);
   const [teamId, setTeamId] = useState(saved ? saved.teamId : "");
@@ -742,11 +773,15 @@ function MyLeague() {
         {error && <div className="error">{error}</div>}
         {!conn && (
           <ConnectLeague
-            onConnected={(c, lg, username) => {
+            onConnected={(c, lg, who) => {
+              setError("");
               setConn(c);
               setLeague(lg);
-              const mine = username
-                ? lg.teams.find((t) => (t.owner || "").toLowerCase() === username.toLowerCase())
+              const mine = who
+                ? lg.teams.find((t) => who.userId && t.owner_id === who.userId) ||
+                  lg.teams.find(
+                    (t) => (t.owner || "").toLowerCase() === who.username.toLowerCase()
+                  )
                 : null;
               if (mine) {
                 setTeamId(mine.team_id);
@@ -852,7 +887,18 @@ function PropLegForm({ onAdd }) {
   const [line, setLine] = useState("");
   const [side, setSide] = useState("over");
   const [odds, setOdds] = useState("-110");
+  const [formError, setFormError] = useState("");
   const add = () => {
+    const o = odds.trim() === "" ? null : Number(odds);
+    if (o !== null && (Number.isNaN(o) || (o > -100 && o < 100))) {
+      setFormError("Odds must be American odds like -110 or +150 (or blank).");
+      return;
+    }
+    if (market !== "anytime_td" && Number.isNaN(Number(line))) {
+      setFormError("Enter a numeric line.");
+      return;
+    }
+    setFormError("");
     onAdd({
       kind: "prop",
       player_id: player.player_id,
@@ -860,7 +906,7 @@ function PropLegForm({ onAdd }) {
       market,
       line: market === "anytime_td" ? 0.5 : Number(line),
       side: market === "anytime_td" ? "over" : side,
-      odds: odds === "" ? null : Number(odds),
+      odds: o,
     });
     setPlayer(null);
     setLine("");
@@ -919,6 +965,7 @@ function PropLegForm({ onAdd }) {
           >
             Add leg
           </button>
+          {formError && <div className="error">{formError}</div>}
         </>
       )}
     </div>
@@ -932,6 +979,7 @@ function GameLines({ games, onAdd, propsAvailable, onProps }) {
       {games.map((g) => {
         const key = `${g.away}@${g.home}`;
         const awaySpread = g.spread_home == null ? null : -g.spread_home;
+        const open = !g.state || g.state === "pre";
         return (
           <div key={key} className="ff-game">
             <div className="ff-row">
@@ -942,6 +990,8 @@ function GameLines({ games, onAdd, propsAvailable, onProps }) {
                 <div className="muted ff-small">
                   {g.kickoff ? new Date(g.kickoff).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" }) : ""}
                   {` · ${g.source}`}
+                  {g.state === "in" && " · LIVE"}
+                  {g.state === "post" && " · FINAL"}
                 </div>
               </span>
               <span className="ff-num ff-small">
@@ -949,7 +999,8 @@ function GameLines({ games, onAdd, propsAvailable, onProps }) {
                 <div className="muted">implied pts</div>
               </span>
             </div>
-            <div className="ff-chips">
+            {!open && <div className="muted ff-small">Lines closed — this game has kicked off.</div>}
+            {open && <div className="ff-chips">
               {g.spread_home != null && (
                 <>
                   <button onClick={() => onAdd({ kind: "game", game: key, market: "spread", team: g.away, line: awaySpread, odds: -110 })}>
@@ -980,12 +1031,12 @@ function GameLines({ games, onAdd, propsAvailable, onProps }) {
                   {g.home} ML {american(g.ml_home)}
                 </button>
               )}
-              {propsAvailable && g.event_id && (
+              {propsAvailable && g.odds_event_id && (
                 <button className="ff-chip-accent" onClick={() => onProps(g)}>
                   Props ›
                 </button>
               )}
-            </div>
+            </div>}
           </div>
         );
       })}
@@ -997,8 +1048,10 @@ function PropsBoard({ game, onAdd, onClose }) {
   const [props, setProps] = useState(null);
   const [error, setError] = useState("");
   useEffect(() => {
-    fetchFantasyProps(game.event_id).then(setProps).catch((e) => setError(e.message));
-  }, [game.event_id]);
+    setProps(null);
+    setError("");
+    fetchFantasyProps(game.odds_event_id).then(setProps).catch((e) => setError(e.message));
+  }, [game.odds_event_id]);
   return (
     <div className="card">
       <div className="ff-row">
@@ -1153,7 +1206,7 @@ function VegasParlays() {
             </div>
             {result.correlations.map((c, i) => (
               <div key={i} className={`ff-small ff-corr ${c.type}`}>
-                {c.type === "positive" ? "🔗" : c.type === "negative" ? "⚠️" : "ℹ️"} {c.note}
+                {{ positive: "🔗", negative: "⚠️", conflict: "⛔" }[c.type] || "ℹ️"} {c.note}
               </div>
             ))}
             <p className="note">
@@ -1170,17 +1223,93 @@ function VegasParlays() {
 // ===========================================================================
 export default function FantasyView() {
   const [tab, setTab] = useState("league");
+  // Keep a pane mounted once opened so switching back doesn't re-run the
+  // league analysis or wipe the parlay slip.
+  const [seen, setSeen] = useState({ league: true });
+  const show = (t) => {
+    setTab(t);
+    setSeen((s) => ({ ...s, [t]: true }));
+  };
   return (
     <>
       <div className="tabs ff-subtabs">
-        <button className={tab === "league" ? "tab active" : "tab"} onClick={() => setTab("league")}>
+        <button className={tab === "league" ? "tab active" : "tab"} onClick={() => show("league")}>
           My League
         </button>
-        <button className={tab === "vegas" ? "tab active" : "tab"} onClick={() => setTab("vegas")}>
+        <button className={tab === "vegas" ? "tab active" : "tab"} onClick={() => show("vegas")}>
           Vegas & Parlays
         </button>
       </div>
-      {tab === "league" ? <MyLeague /> : <VegasParlays />}
+      <div hidden={tab !== "league"}>{seen.league && <MyLeague />}</div>
+      <div hidden={tab !== "vegas"}>{seen.vegas && <VegasParlays />}</div>
     </>
+  );
+}
+
+// ===========================================================================
+// NFL tab: tap a player -> this week's projection + Vegas context
+// ===========================================================================
+const OUTLOOK_LABELS = {
+  pass_att: "Pass att", pass_cmp: "Comp", pass_yd: "Pass yds", pass_td: "Pass TD",
+  pass_int: "INT", rush_att: "Carries", rush_yd: "Rush yds", rush_td: "Rush TD",
+  rec_tgt: "Targets", rec: "Rec", rec_yd: "Rec yds", rec_td: "Rec TD",
+  fgm: "FG made", xpm: "XP made",
+};
+
+export function NflPlayerOutlook({ name, team, position }) {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    setData(null);
+    setError("");
+    fetchNflPlayerOutlook({ name, team, position })
+      .then(setData)
+      .catch((e) => setError(e.message));
+  }, [name, team, position]);
+
+  if (error) return <div className="error">{error}</div>;
+  if (!data) return <div className="note">Loading this week's projection…</div>;
+  if (!data.available) return <div className="note nfl-note">{data.reason}</div>;
+  if (!data.has_projection)
+    return (
+      <div className="note nfl-note">
+        No Week {data.week} projection for {data.name}
+        {data.injury ? ` (${data.injury})` : ""} — likely a bye or not expected to play.
+      </div>
+    );
+  const stats = Object.entries(data.stats);
+  return (
+    <div className="ff-outlook">
+      <div className="ff-row">
+        <span className="ff-grow">
+          <b>Week {data.week}</b>{" "}
+          <span className="muted">
+            {data.opponent ? `${data.home ? "vs" : "@"} ${data.opponent}` : ""}
+            {data.implied != null && ` · team implied ${fmt(data.implied)} · ${spreadStr(data.spread)}`}
+          </span>
+          {data.injury && <span className="ff-inj">{data.injury}</span>}
+        </span>
+      </div>
+      <div className="ff-stat-grid">
+        {stats.map(([k, v]) => (
+          <div key={k}>
+            <b>{fmt(v)}</b>
+            <span className="muted">{OUTLOOK_LABELS[k] || k}</span>
+          </div>
+        ))}
+      </div>
+      <div className="ff-trade-stats">
+        <span>
+          PPR <b>{fmt(data.fantasy.ppr.vegas_adj)}</b>
+        </span>
+        <span>Half {fmt(data.fantasy.half.vegas_adj)}</span>
+        <span>Std {fmt(data.fantasy.std.vegas_adj)}</span>
+        {data.anytime_td_prob != null && <span>Anytime TD {pct(data.anytime_td_prob)}</span>}
+      </div>
+      <div className="muted ff-small">
+        Fantasy points include the Vegas adjustment ({signed((data.vegas_mult - 1) * 100, 0)}%).
+        Grade a book's line in 🏆 Fantasy → Vegas &amp; Parlays.
+      </div>
+    </div>
   );
 }

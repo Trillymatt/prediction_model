@@ -711,6 +711,11 @@ def _poisson_over(mean, line):
     return 1 - cdf
 
 
+def _sig(p):
+    """4 significant figures: rounding to decimal places turns long shots into 0."""
+    return float(f"{p:.4g}") if p is not None else None
+
+
 def american_to_decimal(odds):
     odds = float(odds)
     return 1 + (odds / 100 if odds > 0 else 100 / -odds)
@@ -753,15 +758,67 @@ def prop_mean(market, stats, mult=1.0):
     return v * mult
 
 
-def grade_parlay(legs, week_proj_stats, players, games, uni=None):
+GAME_MARKETS = ("spread", "total", "ml")
+
+
+def _number(x, what):
+    try:
+        v = float(x)
+    except (TypeError, ValueError):
+        raise ValueError(f"{what} must be a number.") from None
+    if math.isnan(v) or math.isinf(v):
+        raise ValueError(f"{what} must be a number.")
+    return v
+
+
+def validate_legs(legs):
+    """Reject malformed legs with a message the UI can show, instead of a 500."""
+    if not isinstance(legs, list) or not 1 <= len(legs) <= 12:
+        raise ValueError("Send 1-12 legs.")
+    for i, leg in enumerate(legs, 1):
+        if not isinstance(leg, dict):
+            raise ValueError(f"Leg {i} is malformed.")
+        odds = leg.get("odds")
+        if odds not in (None, ""):
+            o = _number(odds, f"Leg {i} odds")
+            if -100 < o < 100:
+                raise ValueError(f"Leg {i} odds must be American odds like -110 or +150.")
+        kind = leg.get("kind")
+        if kind == "prop":
+            if not leg.get("player_id"):
+                raise ValueError(f"Leg {i}: pick a player.")
+            if leg.get("market") not in PROP_LABELS:
+                raise ValueError(f"Leg {i}: unsupported prop market '{leg.get('market')}'.")
+            if leg.get("side", "over") not in ("over", "under"):
+                raise ValueError(f"Leg {i}: side must be over or under.")
+            if leg["market"] != "anytime_td":
+                _number(leg.get("line"), f"Leg {i} line")
+        elif kind == "game":
+            if not leg.get("game"):
+                raise ValueError(f"Leg {i}: missing game.")
+            if leg.get("market") not in GAME_MARKETS:
+                raise ValueError(f"Leg {i}: market must be spread, total, or ml.")
+            if leg["market"] == "total":
+                if leg.get("side", "over") not in ("over", "under"):
+                    raise ValueError(f"Leg {i}: side must be over or under.")
+            elif not leg.get("team"):
+                raise ValueError(f"Leg {i}: pick a team.")
+            if leg.get("line") not in (None, ""):
+                _number(leg["line"], f"Leg {i} line")
+        else:
+            raise ValueError(f"Leg {i}: kind must be 'prop' or 'game'.")
+
+
+def grade_parlay(legs, week_proj_stats, players, games):
     """legs: [{kind:'prop', player_id, market, line, side, odds?}
               {kind:'game', game:'AWY@HOM', market:'spread'|'total'|'ml',
                team?, line?, side?, odds?}]"""
+    validate_legs(legs)
     lines = lines_by_team(games)
     implieds = [g[k] for g in games or [] for k in ("implied_home", "implied_away")
                 if g.get(k) is not None]
     avg = sum(implieds) / len(implieds) if implieds else 22.5
-    graded = []
+    graded, raw_probs = [], []
     for leg in legs:
         g = dict(leg)
         odds = leg.get("odds")
@@ -772,8 +829,8 @@ def grade_parlay(legs, week_proj_stats, players, games, uni=None):
             line = lines.get(team)
             mult = vegas_multiplier(pos, line, avg)[0] if pos else 1.0
             mean = prop_mean(leg["market"], week_proj_stats.get(pid), mult)
-            prob = prop_probability(leg["market"], mean, float(leg.get("line") or 0.5),
-                                    leg.get("side", "over"))
+            line_val = 0.5 if leg["market"] == "anytime_td" else float(leg["line"])
+            prob = prop_probability(leg["market"], mean, line_val, leg.get("side", "over"))
             if mean is None:
                 g["note"] = "no projection this week (bye, injury, or unknown player)"
             g.update(player=p.get("name") or leg.get("player"), pos=pos, team=team,
@@ -784,7 +841,8 @@ def grade_parlay(legs, week_proj_stats, players, games, uni=None):
         else:
             prob, label, gk = _game_leg_prob(leg, games)
             g.update(label=label, game=gk, source="market")
-        g["prob"] = round(prob, 4) if prob is not None else None
+        raw_probs.append(prob)
+        g["prob"] = _sig(prob)
         if odds not in (None, "") and prob is not None:
             book = 1 / american_to_decimal(odds)
             g["book_prob"] = round(book, 4)
@@ -793,19 +851,23 @@ def grade_parlay(legs, week_proj_stats, players, games, uni=None):
         g["fair_odds"] = prob_to_american(prob) if prob is not None else None
         graded.append(g)
 
-    probs = [g["prob"] for g in graded if g["prob"] is not None]
-    parlay_p = math.prod(probs) if probs and len(probs) == len(graded) else None
+    # Multiply unrounded probabilities: a long-shot leg rounded to 0.0000
+    # would otherwise zero out the whole parlay.
+    parlay_p = math.prod(raw_probs) if raw_probs and None not in raw_probs else None
+    notes = _correlations(graded)
+    if any(n["type"] == "conflict" for n in notes):
+        parlay_p = 0.0
     dec = None
     if graded and all(g.get("odds") not in (None, "") for g in graded):
         dec = math.prod(american_to_decimal(g["odds"]) for g in graded)
     return {
         "legs": graded,
-        "hit_prob": round(parlay_p, 4) if parlay_p is not None else None,
+        "hit_prob": _sig(parlay_p),
         "fair_odds": prob_to_american(parlay_p) if parlay_p else None,
         "book_decimal": round(dec, 3) if dec else None,
         "book_american": prob_to_american(1 / dec) if dec else None,
-        "ev": round(parlay_p * dec - 1, 4) if parlay_p and dec else None,
-        "correlations": _correlations(graded),
+        "ev": round(parlay_p * dec - 1, 4) if parlay_p is not None and dec else None,
+        "correlations": notes,
     }
 
 
@@ -831,7 +893,7 @@ def _game_leg_prob(leg, games):
     if market == "total":
         if g.get("total") is None:
             return None, f"{gk} total (no line)", gk
-        line = float(leg.get("line") or g["total"])
+        line = float(leg["line"]) if leg.get("line") not in (None, "") else g["total"]
         side = leg.get("side", "over")
         p = 1 - _phi((line - g["total"]) / 10.5)
         return (p if side == "over" else 1 - p), f"{gk} {side} {line:g}", gk
@@ -854,8 +916,33 @@ def _game_leg_prob(leg, games):
     return p, f"{team} {line:+g}", gk
 
 
+def _conflicts(legs):
+    """Legs that can't all win together (both sides of one market)."""
+    out = []
+    for i, a in enumerate(legs):
+        for b in legs[i + 1:]:
+            if a.get("kind") != b.get("kind") or a.get("market") != b.get("market"):
+                continue
+            if a.get("kind") == "game" and a.get("game") and a.get("game") == b.get("game"):
+                if a["market"] in ("ml", "spread") and a.get("team") != b.get("team"):
+                    if a["market"] == "ml" or (a.get("line") is not None and b.get("line") is not None
+                                               and float(a["line"]) + float(b["line"]) <= 0):
+                        out.append(f"{a['label']} and {b['label']} can't both win.")
+                elif a["market"] == "total" and a.get("side") != b.get("side"):
+                    over, under = (a, b) if a.get("side", "over") == "over" else (b, a)
+                    if over.get("line") is not None and under.get("line") is not None and \
+                            float(over["line"]) >= float(under["line"]):
+                        out.append(f"{over['label']} and {under['label']} can't both win.")
+            elif a.get("kind") == "prop" and str(a.get("player_id")) == str(b.get("player_id")) \
+                    and a.get("side", "over") != b.get("side", "over"):
+                over, under = (a, b) if a.get("side", "over") == "over" else (b, a)
+                if float(over.get("line") or 0.5) >= float(under.get("line") or 0.5):
+                    out.append(f"{over['label']} and {under['label']} can't both win.")
+    return out
+
+
 def _correlations(legs):
-    notes = []
+    notes = [{"type": "conflict", "game": None, "note": msg} for msg in _conflicts(legs)]
     by_game = {}
     for g in legs:
         if g.get("game"):
@@ -897,6 +984,58 @@ def _correlations(legs):
             notes.append({"type": "info", "game": game,
                           "note": "Multiple legs from one game -- outcomes aren't fully independent."})
     return notes
+
+
+STD_SCORING = {"pass_yd": 0.04, "pass_td": 4, "pass_int": -1, "pass_2pt": 2,
+               "rush_yd": 0.1, "rush_td": 6, "rush_2pt": 2,
+               "rec_yd": 0.1, "rec_td": 6, "rec_2pt": 2, "fum_lost": -2}
+OUTLOOK_STATS = ("pass_att", "pass_cmp", "pass_yd", "pass_td", "pass_int", "rush_att",
+                 "rush_yd", "rush_td", "rec_tgt", "rec", "rec_yd", "rec_td",
+                 "fgm", "xpm")
+
+
+def find_player(players, name, team="", pos=""):
+    """Sleeper id for a name (+ optional team abbr / position), or None."""
+    import fantasy_sources as src
+    key = src.name_key(name)
+    cands = [pid for pid, p in players.items() if src.name_key(p["name"]) == key]
+    if len(cands) > 1 and pos:
+        cands = [c for c in cands if players[c]["pos"] == pos] or cands
+    if len(cands) > 1 and team:
+        cands = [c for c in cands if players[c].get("team") == team] or cands
+    return cands[0] if cands else None
+
+
+def player_outlook(players, week_proj_stats, games, pid, week):
+    """One player's projected stat line, fantasy points in the three common
+    formats, and Vegas context for this week."""
+    p = players[pid]
+    stats = week_proj_stats.get(pid) or {}
+    lines = lines_by_team(games)
+    implieds = [g[k] for g in games or [] for k in ("implied_home", "implied_away")
+                if g.get(k) is not None]
+    avg = sum(implieds) / len(implieds) if implieds else 22.5
+    line = lines.get(p.get("team"))
+    mult, notes = vegas_multiplier(p["pos"], line, avg)
+    inj = (p.get("injury") or "").lower()
+    imult = INJURY_MULT.get(inj, 1.0)
+    fantasy = {}
+    for label, rec in (("ppr", 1.0), ("half", 0.5), ("std", 0.0)):
+        base = fantasy_points(stats, dict(STD_SCORING, rec=rec), p["pos"])
+        fantasy[label] = {"proj": round(base, 1), "vegas_adj": round(base * mult * imult, 1)}
+    td_mean = prop_mean("anytime_td", stats, mult)
+    return {
+        "player_id": pid, "name": p["name"], "pos": p["pos"], "team": p.get("team"),
+        "injury": p.get("injury"), "week": week, "has_projection": bool(stats),
+        "stats": {k: round(stats[k], 1) for k in OUTLOOK_STATS if stats.get(k)},
+        "fantasy": fantasy,
+        "anytime_td_prob": round(prop_probability("anytime_td", td_mean, 0.5), 3)
+        if td_mean is not None and p["pos"] in SKILL else None,
+        "opponent": (line or {}).get("opponent"), "home": (line or {}).get("home"),
+        "implied": (line or {}).get("implied"), "spread": (line or {}).get("spread"),
+        "total": (line or {}).get("total"), "kickoff": (line or {}).get("kickoff"),
+        "vegas_mult": round(mult, 3), "notes": notes,
+    }
 
 
 def grade_props_board(props, week_proj_stats, players, games, limit=25):
@@ -979,10 +1118,12 @@ def prepare(league, week=None):
     state = src.nfl_state()
     season = league.get("season") or state["season"]
     current = int(week or state["week"] or 1)
+    end = max(END_WEEK, current)
     players = src.sleeper_players()
-    projs, stats = load_week_data(season, current)
+    projs, stats = load_week_data(season, current, end)
     rostered = {p for t in league["teams"] for p in t["players"]}
-    uni = build_universe(players, league["scoring"], projs, stats, current, rostered=rostered)
+    uni = build_universe(players, league["scoring"], projs, stats, current,
+                         end_week=end, rostered=rostered)
     repl, per_team = replacement_levels(uni, league["slots"], len(league["teams"]))
     attach_values(uni, repl)
     try:

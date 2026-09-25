@@ -39,6 +39,7 @@ Fantasy advisor (Sleeper / ESPN leagues -- see FANTASY_SETUP.md):
   POST /api/fantasy/trade               grade a specific trade
   GET  /api/fantasy/odds?week=          spreads / totals / implied team totals
   GET  /api/fantasy/players?q=          player search (parlay builder)
+  GET  /api/fantasy/player?name=&team=  one player's projection this week (NFL tab)
   POST /api/fantasy/parlay              grade prop + game-line parlay legs
   GET  /api/fantasy/props?event_id=     graded prop board (needs ODDS_API_KEY)
 
@@ -501,12 +502,37 @@ def nfl_roster(
 # for the one upstream call, and never stored.
 _LEAGUE_TTL = 300
 _league_cache = {}
+# Values that end up in upstream URL paths are validated so a crafted input
+# can't walk to another endpoint (e.g. "../" on the Odds API with our key).
+_SEASON_RE = re.compile(r"^20\d\d$")
+_SLEEPER_USER_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.\-]{0,39}$")
+_EVENT_ID_RE = re.compile(r"^[A-Za-z0-9]{1,64}$")
 
 
 def _fantasy_error(exc: Exception) -> HTTPException:
     if isinstance(exc, fantasy_sources.SourceError):
-        return HTTPException(status_code=502, detail=str(exc))
+        return HTTPException(status_code=exc.status, detail=str(exc))
     return HTTPException(status_code=400, detail=str(exc))
+
+
+def _season(raw) -> str:
+    season = str(raw or fantasy_sources.nfl_state()["season"]).strip()
+    if not _SEASON_RE.match(season):
+        raise HTTPException(status_code=400, detail="Season must be a year like 2026.")
+    return season
+
+
+def _week(raw):
+    """None (= current week) or an int 1-22."""
+    if raw in (None, "", 0, "0"):
+        return None
+    try:
+        wk = int(raw)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Week must be a number.") from None
+    if not 1 <= wk <= 22:
+        raise HTTPException(status_code=400, detail="Week must be between 1 and 22.")
+    return wk
 
 
 def _load_fantasy_league(body: dict):
@@ -515,14 +541,17 @@ def _load_fantasy_league(body: dict):
     if platform not in ("sleeper", "espn") or not league_id.isdigit():
         raise HTTPException(status_code=400,
                             detail="Send platform ('sleeper' or 'espn') and a numeric league_id.")
-    season = str(body.get("season") or fantasy_sources.nfl_state()["season"])
+    season = _season(body.get("season"))
     s2, swid = body.get("espn_s2") or None, body.get("swid") or None
     key = (platform, league_id, season, hash((s2, swid)))
+    now = time.time()
     hit = _league_cache.get(key)
-    if hit and time.time() - hit[0] < _LEAGUE_TTL and not body.get("refresh"):
+    if hit and now - hit[0] < _LEAGUE_TTL and not body.get("refresh"):
         return hit[1]
     league = fantasy_engine.load_league(platform, league_id, season, espn_s2=s2, swid=swid)
-    _league_cache[key] = (time.time(), league)
+    for k in [k for k, v in _league_cache.items() if now - v[0] >= _LEAGUE_TTL]:
+        _league_cache.pop(k, None)
+    _league_cache[key] = (now, league)
     return league
 
 
@@ -530,9 +559,11 @@ def _load_fantasy_league(body: dict):
 def fantasy_sleeper_leagues(username: str = Query(..., min_length=1),
                             season: str = Query("", description="defaults to current")):
     """Every NFL league a Sleeper user is in this season."""
+    username = username.strip()
+    if not _SLEEPER_USER_RE.match(username):
+        raise HTTPException(status_code=400, detail="That doesn't look like a Sleeper username.")
     try:
-        return fantasy_sources.sleeper_user_leagues(
-            username.strip(), season or fantasy_sources.nfl_state()["season"])
+        return fantasy_sources.sleeper_user_leagues(username, _season(season))
     except fantasy_sources.SourceError as exc:
         raise _fantasy_error(exc)
 
@@ -560,7 +591,8 @@ def fantasy_analyze(body: dict = Body(..., description="{platform, league_id, te
     across the league, trade ideas, buy-low / sell-high, and waiver targets."""
     try:
         lg = _load_fantasy_league(body)
-        return fantasy_engine.analyze_league(lg, str(body.get("team_id") or ""), body.get("week"))
+        return fantasy_engine.analyze_league(lg, str(body.get("team_id") or ""),
+                                             _week(body.get("week")))
     except (fantasy_sources.SourceError, ValueError) as exc:
         raise _fantasy_error(exc)
 
@@ -568,14 +600,19 @@ def fantasy_analyze(body: dict = Body(..., description="{platform, league_id, te
 @app.post("/api/fantasy/trade")
 def fantasy_trade(body: dict = Body(..., description="{platform, league_id, team_id, partner_id, give:[ids], get:[ids], ...}")):
     """Grade a specific trade -- one you're drafting or one you were sent."""
+    give = list(dict.fromkeys(str(p) for p in body.get("give") or []))
+    get = list(dict.fromkeys(str(p) for p in body.get("get") or []))
+    if set(give) & set(get):
+        raise HTTPException(status_code=400, detail="A player can't be on both sides of a trade.")
+    if len(give) > 6 or len(get) > 6:
+        raise HTTPException(status_code=400, detail="Up to 6 players per side.")
     try:
         lg = _load_fantasy_league(body)
-        ctx = fantasy_engine.prepare(lg, body.get("week"))
+        ctx = fantasy_engine.prepare(lg, _week(body.get("week")))
         needs = fantasy_engine.team_needs(lg, ctx["uni"], ctx["repl"], ctx["per_team"])
         return fantasy_engine.evaluate_trade(
             lg, ctx["uni"], needs, ctx["repl"], ctx["per_team"],
-            str(body.get("team_id") or ""), str(body.get("partner_id") or ""),
-            [str(p) for p in body.get("give") or []], [str(p) for p in body.get("get") or []])
+            str(body.get("team_id") or ""), str(body.get("partner_id") or ""), give, get)
     except (fantasy_sources.SourceError, ValueError) as exc:
         raise _fantasy_error(exc)
 
@@ -605,7 +642,7 @@ def fantasy_players(q: str = Query("", description="name fragment"),
 
 def _week_context(week):
     state = fantasy_sources.nfl_state()
-    wk = int(week or state["week"])
+    wk = _week(week) or state["week"]
     proj = fantasy_sources.sleeper_week_projections(state["season"], wk)
     try:
         games = fantasy_sources.game_lines(state["season"], wk, state["season_type"])
@@ -618,24 +655,57 @@ def _week_context(week):
 def fantasy_parlay(body: dict = Body(..., description="{legs:[...], week?}")):
     """Grade a parlay: player props (our projection vs your line) and game
     lines (spread/total/moneyline, priced off the market)."""
-    legs = body.get("legs") or []
-    if not legs or len(legs) > 12:
-        raise HTTPException(status_code=400, detail="Send 1-12 legs.")
+    legs = body.get("legs")
     try:
+        fantasy_engine.validate_legs(legs)
         proj, games = _week_context(body.get("week"))
         return fantasy_engine.grade_parlay(legs, proj, fantasy_sources.sleeper_players(), games)
-    except (fantasy_sources.SourceError, ValueError, KeyError) as exc:
+    except (fantasy_sources.SourceError, ValueError) as exc:
         raise _fantasy_error(exc)
 
 
 @app.get("/api/fantasy/props")
 def fantasy_props(event_id: str = Query(..., min_length=1), week: int = Query(0, ge=0, le=22)):
     """Every player-prop line for one game, graded by the model (needs ODDS_API_KEY)."""
+    if not _EVENT_ID_RE.match(event_id):
+        raise HTTPException(status_code=400, detail="Bad event id.")
     try:
         proj, games = _week_context(week)
         props = fantasy_sources.event_props(event_id)
         return {"props": fantasy_engine.grade_props_board(
             props, proj, fantasy_sources.sleeper_players(), games)}
+    except fantasy_sources.SourceError as exc:
+        raise _fantasy_error(exc)
+
+
+# ESPN roster positions -> Sleeper fantasy positions.
+_NFL_POS_TO_FANTASY = {"QB": "QB", "RB": "RB", "FB": "RB", "HB": "RB", "WR": "WR",
+                       "TE": "TE", "K": "K", "PK": "K"}
+
+
+@app.get("/api/fantasy/player")
+def fantasy_player(name: str = Query(..., min_length=2, max_length=80),
+                   team: str = Query("", max_length=40, description="full name or abbr"),
+                   position: str = Query("", max_length=4),
+                   week: int = Query(0, ge=0, le=22)):
+    """This week's projection for one NFL player (powers the NFL tab's player
+    taps): stat line, fantasy points in PPR/half/standard, Vegas context."""
+    pos = position.strip().upper()
+    if pos and pos not in _NFL_POS_TO_FANTASY:
+        return {"available": False,
+                "reason": "Projections cover fantasy positions only (QB, RB, WR, TE, K)."}
+    try:
+        players = fantasy_sources.sleeper_players()
+        pid = fantasy_engine.find_player(players, name, fantasy_sources.team_abbr(team),
+                                         _NFL_POS_TO_FANTASY.get(pos, ""))
+        if not pid:
+            return {"available": False,
+                    "reason": f"Couldn't find {name} in Sleeper's player database."}
+        state = fantasy_sources.nfl_state()
+        wk = week or state["week"]
+        proj, games = _week_context(wk)
+        return {"available": True,
+                **fantasy_engine.player_outlook(players, proj, games, pid, wk)}
     except fantasy_sources.SourceError as exc:
         raise _fantasy_error(exc)
 

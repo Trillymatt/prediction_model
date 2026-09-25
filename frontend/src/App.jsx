@@ -18,7 +18,7 @@ import {
   fetchUpcomingNflGames,
   searchNflPlayers,
 } from "./api.js";
-import FantasyView from "./Fantasy.jsx";
+import FantasyView, { NflPlayerOutlook } from "./Fantasy.jsx";
 
 // ===========================================================================
 // World Cup helpers: flags, knockout-round labels, kickoff formatting
@@ -491,7 +491,7 @@ function RosterPlayerRow({ p, opponent, addProp, sport = "nba" }) {
     sport === "soccer"
       ? { val: p.ga_per90 != null ? `${p.ga_per90}` : "–", note: "G+A/90 · tap" }
       : sport === "nfl"
-      ? { val: p.position || "–", note: "tap for info" }
+      ? { val: p.position || "–", note: "tap for projection" }
       : { val: p.ppg != null ? `${p.ppg}` : "–", note: p.ppg != null ? "ppg · tap" : "tap for props" };
 
   return (
@@ -515,11 +515,7 @@ function RosterPlayerRow({ p, opponent, addProp, sport = "nba" }) {
       </button>
       {open && sport === "nfl" && (
         <div className="pick-detail">
-          <div className="note nfl-note">
-            {p.player_name} · {p.team}
-            {p.position ? ` · ${p.position}` : ""}. Player props aren't live
-            yet for the NFL — check back once the projection model lands.
-          </div>
+          <NflPlayerOutlook name={p.player_name} team={p.team} position={p.position} />
         </div>
       )}
       {open && sport !== "nfl" && (
@@ -550,7 +546,7 @@ function RosterView({ roster, addProp, sport = "nba" }) {
             : `${roster.away_team} ${sep} ${roster.home_team}`}
         </label>
         <span className="muted">
-          {sport === "nfl" ? "roster directory" : "tap any player for the model's read"}
+          {sport === "nfl" ? "tap a player for this week's projection" : "tap any player for the model's read"}
         </span>
       </div>
       {roster.teams.map((t) => (
@@ -1809,10 +1805,9 @@ function SoccerPropsView({ addProp }) {
 }
 
 // ===========================================================================
-// NFL — schedule now, projections as the pipeline lands (see NFL_SETUP.md)
+// NFL — schedule + rosters (Supabase, see NFL_SETUP.md); player taps show
+// this week's Sleeper projection with Vegas context (/api/fantasy/player).
 // ===========================================================================
-// Search any player in the roster directory; shows team/position since
-// there's no projection engine yet (that's the next NFL pipeline stage).
 function NflPlayerLookup() {
   const [player, setPlayer] = useState(null);
 
@@ -1820,7 +1815,7 @@ function NflPlayerLookup() {
     <div className="card controls">
       <div className="picks-head">
         <label>🔎 Player lookup</label>
-        <span className="muted">roster directory</span>
+        <span className="muted">this week's projection</span>
       </div>
       <PlayerSearch
         selected={player}
@@ -1829,13 +1824,11 @@ function NflPlayerLookup() {
         sport="nfl"
       />
       {player && (
-        <div className="note nfl-note">
-          {player.player_name}
-          {player.team ? ` · ${player.team}` : ""}
-          {player.position ? ` · ${player.position}` : ""}. Props and
-          projections aren't live yet for the NFL — check back once the
-          model lands.
-        </div>
+        <NflPlayerOutlook
+          name={player.player_name}
+          team={player.team}
+          position={player.position}
+        />
       )}
     </div>
   );
@@ -1889,9 +1882,9 @@ function NflView() {
           <span className="muted">2026 season</span>
         </div>
         <div className="note nfl-note">
-          NFL is new here — the schedule and rosters are live, and game
-          predictions + player props are in the works. Tap a game to see
-          both rosters.
+          Tap a game to see both rosters, then tap a player for this week's
+          projection and Vegas context. For your league, lineup, trades and
+          parlays, use the 🏆 Fantasy tab.
         </div>
         {games === null && <Skeleton rows={5} />}
         {error && <div className="muted">Schedule unavailable: {error}</div>}

@@ -50,7 +50,12 @@ TIMEOUT = 20
 
 class SourceError(Exception):
     """A platform call failed in a way the user can act on (bad id, private
-    league without cookies, platform down). The API turns it into a 4xx/503."""
+    league without cookies, platform down). `status` is the HTTP code the API
+    answers with: 404 not found, 403 private/denied, 502 upstream trouble."""
+
+    def __init__(self, message, status=502):
+        super().__init__(message)
+        self.status = status
 
 
 # ---------------------------------------------------------------------------
@@ -84,9 +89,9 @@ def _get(url, params=None, cookies=None, what="request"):
     except requests.RequestException as exc:
         raise SourceError(f"{what} failed: {exc}") from exc
     if res.status_code in (401, 403):
-        raise SourceError(f"{what}: access denied ({res.status_code}).")
+        raise SourceError(f"{what}: access denied ({res.status_code}).", status=403)
     if res.status_code == 404:
-        raise SourceError(f"{what}: not found.")
+        raise SourceError(f"{what}: not found.", status=404)
     if not res.ok:
         raise SourceError(f"{what} failed ({res.status_code}).")
     try:
@@ -204,9 +209,12 @@ def sleeper_players():
                 "status": p.get("status"),
                 "rank": p.get("search_rank"),
             }
-        os.makedirs(CACHE_DIR, exist_ok=True)
-        with open(path, "w") as f:
-            json.dump(trimmed, f)
+        try:
+            os.makedirs(CACHE_DIR, exist_ok=True)
+            with open(path, "w") as f:
+                json.dump(trimmed, f)
+        except OSError:
+            pass  # read-only disk: the in-memory cache still covers this process
         return trimmed
     return _cached("players", 3600, load)
 
@@ -268,7 +276,7 @@ def sleeper_trending(kind="add", hours=48, limit=40):
 def sleeper_user_leagues(username, season):
     user = _get(f"{SLEEPER}/user/{username}", what="Sleeper user lookup")
     if not user or not user.get("user_id"):
-        raise SourceError(f"No Sleeper user named '{username}'.")
+        raise SourceError(f"No Sleeper user named '{username}'.", status=404)
     leagues = _get(f"{SLEEPER}/user/{user['user_id']}/leagues/nfl/{season}",
                    what="Sleeper leagues") or []
     return {
@@ -287,7 +295,7 @@ def sleeper_user_leagues(username, season):
 def sleeper_league(league_id):
     lg = _get(f"{SLEEPER}/league/{league_id}", what="Sleeper league")
     if not lg:
-        raise SourceError(f"Sleeper league {league_id} not found.")
+        raise SourceError(f"Sleeper league {league_id} not found.", status=404)
     rosters = _get(f"{SLEEPER}/league/{league_id}/rosters", what="Sleeper rosters") or []
     users = _get(f"{SLEEPER}/league/{league_id}/users", what="Sleeper league users") or []
     return normalize_sleeper(lg, rosters, users)
@@ -343,7 +351,7 @@ def espn_league(league_id, season, espn_s2=None, swid=None):
         if "access denied" in str(exc) and not cookies:
             raise SourceError(
                 "This ESPN league is private. Add your espn_s2 and SWID cookies "
-                "(from espn.com while logged in) to connect it.") from exc
+                "(from espn.com while logged in) to connect it.", status=403) from exc
         raise
     return normalize_espn(data, sleeper_players())
 
@@ -447,6 +455,16 @@ def normalize_espn(data, players):
 _DETAILS = re.compile(r"^\s*([A-Z]{2,4})\s+(-?\d+(?:\.\d+)?)\s*$")
 
 
+def _num(x):
+    """ESPN sometimes sends numbers as strings ('-170', '47.5'); None if not numeric."""
+    if isinstance(x, (int, float)):
+        return float(x)
+    try:
+        return float(str(x).replace("+", ""))
+    except (TypeError, ValueError):
+        return None
+
+
 def american_to_prob(odds):
     odds = float(odds)
     return 100 / (odds + 100) if odds > 0 else -odds / (-odds + 100)
@@ -478,7 +496,7 @@ def parse_espn_scoreboard(data):
         if not home or not away:
             continue
         odds = (comp.get("odds") or [None])[0] or {}
-        total = odds.get("overUnder")
+        total = _num(odds.get("overUnder"))
         spread_home = None
         m = _DETAILS.match(odds.get("details") or "")
         if m:
@@ -486,11 +504,10 @@ def parse_espn_scoreboard(data):
             spread_home = -pts if fav == home else pts
         elif (odds.get("details") or "").upper() == "EVEN":
             spread_home = 0.0
-        ml_home = ((odds.get("homeTeamOdds") or {}).get("moneyLine"))
-        ml_away = ((odds.get("awayTeamOdds") or {}).get("moneyLine"))
+        ml_home = _num((odds.get("homeTeamOdds") or {}).get("moneyLine"))
+        ml_away = _num((odds.get("awayTeamOdds") or {}).get("moneyLine"))
         status = (((comp.get("status") or {}).get("type")) or {}).get("state")
-        g = _game_from_lines(home, away, spread_home,
-                             float(total) if total is not None else None,
+        g = _game_from_lines(home, away, spread_home, total,
                              ml_home, ml_away, kickoff=ev.get("date"),
                              source=((odds.get("provider") or {}).get("name")) or "espn",
                              event_id=ev.get("id"))
@@ -504,6 +521,14 @@ def _odds_api_key():
 
 
 _ODDS_API_NAMES = None
+
+
+def team_abbr(name):
+    """'Kansas City Chiefs' or 'KC' -> 'KC' ('' if unknown)."""
+    if not name:
+        return ""
+    a = _odds_api_abbr(name.strip())
+    return canon_abbr(a) if len(a) <= 4 else ""
 
 
 def _odds_api_abbr(full_name):
@@ -545,12 +570,13 @@ def parse_odds_api_games(rows):
             for mk in bk.get("markets") or []:
                 for o in mk.get("outcomes") or []:
                     team = _odds_api_abbr(o.get("name"))
-                    if mk.get("key") == "spreads" and team == home and o.get("point") is not None:
-                        spreads.append(float(o["point"]))
-                    elif mk.get("key") == "totals" and o.get("name") == "Over":
-                        totals.append(float(o["point"]))
-                    elif mk.get("key") == "h2h":
-                        (mlh if team == home else mla).append(float(o["price"]))
+                    point, price = _num(o.get("point")), _num(o.get("price"))
+                    if mk.get("key") == "spreads" and team == home and point is not None:
+                        spreads.append(point)
+                    elif mk.get("key") == "totals" and o.get("name") == "Over" and point is not None:
+                        totals.append(point)
+                    elif mk.get("key") == "h2h" and price is not None:
+                        (mlh if team == home else mla).append(price)
         g = _game_from_lines(home, away, _median(spreads), _median(totals),
                              _median(mlh), _median(mla), kickoff=ev.get("commence_time"),
                              source=f"consensus of {len(ev.get('bookmakers') or [])} books",
@@ -560,27 +586,72 @@ def parse_odds_api_games(rows):
     return games
 
 
+def merge_odds(espn_games, odds_games):
+    """Overlay The Odds API consensus onto ESPN's schedule for the week.
+
+    The Odds API lists every upcoming event (several weeks out), so it can't
+    define the week on its own: ESPN decides which matchups are this week,
+    and only games that haven't kicked off take the consensus line."""
+    by_pair = {(g["away"], g["home"]): g for g in odds_games}
+    out = []
+    for g in espn_games:
+        o = by_pair.get((g["away"], g["home"]))
+        if o and g.get("state") in (None, "pre"):
+            merged = dict(g)
+            for k in ("spread_home", "total", "ml_home", "ml_away", "implied_home",
+                      "implied_away", "win_prob_home", "source"):
+                if o.get(k) is not None:
+                    merged[k] = o[k]
+            merged["odds_event_id"] = o["event_id"]
+            out.append(merged)
+        else:
+            out.append(g)
+    return out
+
+
+def _starts_within(iso, days):
+    try:
+        t = datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    delta = (t - datetime.now(t.tzinfo)).total_seconds()
+    return -4 * 3600 <= delta <= days * 86400
+
+
 def game_lines(season, week, season_type="regular"):
     """This week's games with spread / total / moneyline / implied team totals.
 
-    Uses The Odds API consensus when ODDS_API_KEY is set (it only lists games
-    that haven't kicked off), otherwise ESPN's scoreboard odds."""
+    ESPN's scoreboard defines the week's matchups (and supplies its own
+    lines). With ODDS_API_KEY set, a median consensus across US books replaces
+    ESPN's single-book line for every game that hasn't started, and each such
+    game carries `odds_event_id` for its player-prop board."""
     def load():
+        stype = {"pre": 1, "regular": 2, "post": 3}.get(season_type, 2)
+        espn_error = None
+        try:
+            data = _get(ESPN_SCOREBOARD, params={"week": week, "seasontype": stype,
+                                                 "dates": season}, what="ESPN scoreboard")
+            games = parse_espn_scoreboard(data)
+        except SourceError as exc:
+            games, espn_error = [], exc
         key = _odds_api_key()
         if key:
             try:
                 rows = _get(f"{ODDS_API}/odds", params={
                     "apiKey": key, "regions": "us", "oddsFormat": "american",
                     "markets": "h2h,spreads,totals"}, what="Odds API")
-                games = parse_odds_api_games(rows)
+                odds_games = parse_odds_api_games(rows)
                 if games:
-                    return games
+                    games = merge_odds(games, odds_games)
+                else:
+                    # ESPN down: fall back to the next week of Odds API events.
+                    games = [dict(g, odds_event_id=g["event_id"]) for g in odds_games
+                             if _starts_within(g.get("kickoff"), 7)]
             except SourceError:
                 pass
-        stype = {"pre": 1, "regular": 2, "post": 3}.get(season_type, 2)
-        data = _get(ESPN_SCOREBOARD, params={"week": week, "seasontype": stype,
-                                             "dates": season}, what="ESPN scoreboard")
-        return parse_espn_scoreboard(data)
+        if not games and espn_error:
+            raise espn_error
+        return games
     return _cached(f"lines:{season}:{week}:{season_type}", 900, load)
 
 
@@ -605,17 +676,17 @@ def parse_odds_api_props(event):
                 continue
             for o in mk.get("outcomes") or []:
                 player = o.get("description")
-                side = (o.get("name") or "").lower()
-                if market == "anytime_td":
-                    side, point = "over", 0.5
-                else:
-                    point = o.get("point")
+                side = {"yes": "over", "no": "under"}.get(
+                    (o.get("name") or "").lower(), (o.get("name") or "").lower())
+                point = 0.5 if market == "anytime_td" else _num(o.get("point"))
                 if not player or point is None or side not in ("over", "under"):
                     continue
                 k = (player, market, float(point))
                 row = best.setdefault(k, {"player": player, "market": market,
                                           "line": float(point), "over": None, "under": None})
-                price = float(o.get("price"))
+                price = _num(o.get("price"))
+                if price is None or -100 < price < 100:
+                    continue
                 if row[side] is None or price > row[side]:
                     row[side] = price
     return list(best.values())
@@ -624,7 +695,8 @@ def parse_odds_api_props(event):
 def event_props(event_id):
     key = _odds_api_key()
     if not key:
-        raise SourceError("Player-prop lines need an ODDS_API_KEY (the-odds-api.com).")
+        raise SourceError("Player-prop lines need an ODDS_API_KEY (the-odds-api.com).",
+                          status=503)
 
     def load():
         ev = _get(f"{ODDS_API}/events/{event_id}/odds", params={

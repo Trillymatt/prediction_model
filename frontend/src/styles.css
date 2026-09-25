@@ -1442,7 +1442,8 @@ select:focus {
 .ff-corr {
   margin-top: 6px;
 }
-.ff-corr.negative {
+.ff-corr.negative,
+.ff-corr.conflict {
   color: #ff9b94;
 }
 .ff-legform .row {
@@ -1450,4 +1451,25 @@ select:focus {
 }
 .ff-legform .field {
   min-width: 90px;
+}
+.ff-outlook {
+  margin-top: 8px;
+}
+.ff-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
+  gap: 8px;
+  margin: 8px 0;
+}
+.ff-stat-grid div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 6px 4px;
+  background: var(--card-2);
+  border-radius: 8px;
+  font-size: 15px;
+}
+.ff-stat-grid .muted {
+  font-size: 11px;
 }

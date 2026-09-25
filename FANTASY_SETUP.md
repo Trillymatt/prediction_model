@@ -47,7 +47,9 @@ Set `ODDS_API_KEY` (from [the-odds-api.com](https://the-odds-api.com)) in the
 server's environment / `.env`. With it:
 
 - Game lines use a median consensus across US books instead of ESPN's single
-  provider.
+  provider. ESPN still decides which matchups are "this week" (The Odds API
+  lists several weeks ahead), and games that have kicked off keep ESPN's line
+  and close for betting in the UI.
 - Each game on the Vegas board gets a **Props ›** button that loads every
   player-prop line (pass/rush/rec yards, receptions, pass TDs, anytime TD) and
   ranks them by model edge. Each game's props cost API credits, so they're
@@ -65,6 +67,11 @@ server's environment / `.env`. With it:
 | GET | `/api/fantasy/players` | `q` |
 | POST | `/api/fantasy/parlay` | `{legs: [...]}` (see `fantasy_engine.grade_parlay`) |
 | GET | `/api/fantasy/props` | `event_id` (needs `ODDS_API_KEY`) |
+| GET | `/api/fantasy/player` | `name`, `team?`, `position?`, `week?` — one player's projection (NFL tab) |
+
+Errors come back as `{"detail": "..."}` with 400 (bad input), 403 (private
+ESPN league without cookies), 404 (unknown user/league), 503 (props without
+an `ODDS_API_KEY`) or 502 (Sleeper/ESPN/odds provider trouble).
 
 No Supabase tables are needed: the fantasy side runs off the platforms'
 public APIs. The Sleeper player database (~5 MB) is cached in `.cache/` for
@@ -88,4 +95,6 @@ buy/sell, start/sit, waivers, parlays, and every API route.
   change shape, `fantasy_sources.py` is the one place to update.
 - IDP slots aren't supported yet (they're ignored when building lineups).
 - Parlay legs are treated as independent for the hit chance. The
-  correlation notes tell you when that's optimistic or pessimistic.
+  correlation notes tell you when that's optimistic or pessimistic, and legs
+  that can't both win (both moneylines, over and under of the same total)
+  are flagged and price the parlay at 0%.

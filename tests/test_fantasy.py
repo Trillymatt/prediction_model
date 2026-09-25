@@ -366,7 +366,7 @@ def _fake_http(world):
                      "total_rosters": 10, "status": "in_season"}]
         if url == src.ESPN_SCOREBOARD:
             return board
-        raise src.SourceError(f"{what}: not found.")
+        raise src.SourceError(f"{what}: not found.", status=404)
     return fake_get
 
 
@@ -428,4 +428,140 @@ def test_api_routes(world, monkeypatch, tmp_path):
     assert 0 < r.json()["hit_prob"] < 1
 
     r = c.get("/api/fantasy/props", params={"event_id": "e1"})
-    assert r.status_code == 502 and "ODDS_API_KEY" in r.json()["detail"]
+    assert r.status_code == 503 and "ODDS_API_KEY" in r.json()["detail"]
+
+
+# ---------------------------------------------------------------------------
+# Regression tests for bugs fixed in the review pass
+# ---------------------------------------------------------------------------
+def test_bad_odds_rejected_not_crash(world):
+    leg = {"kind": "prop", "player_id": "KC", "market": "rec", "line": 4.5, "odds": 0}
+    with pytest.raises(ValueError, match="American odds"):
+        fe.grade_parlay([leg], {}, world["players"], [])
+    for bad in ([], [{"kind": "prop", "market": "rec", "line": 1}],
+                [{"kind": "prop", "player_id": "1", "market": "bogus", "line": 1}],
+                [{"kind": "prop", "player_id": "1", "market": "rec", "line": "abc"}],
+                [{"kind": "game", "game": "A@B", "market": "spread"}],
+                [{"kind": "nope"}]):
+        with pytest.raises(ValueError):
+            fe.validate_legs(bad)
+
+
+def test_merge_odds_keeps_espn_week():
+    espn = [src._game_from_lines("KC", "BUF", -3.0, 47.0, event_id="e1"),
+            src._game_from_lines("DAL", "PHI", 1.0, 44.0, event_id="e2")]
+    espn[0]["state"], espn[1]["state"] = "pre", "post"
+    odds = [src._game_from_lines("KC", "BUF", -4.5, 49.5, event_id="o1"),
+            src._game_from_lines("DAL", "PHI", 3.0, 41.0, event_id="o2"),
+            # next week's KC game must not leak into this week
+            src._game_from_lines("KC", "DEN", -7.0, 45.0, event_id="o3")]
+    merged = src.merge_odds(espn, odds)
+    assert len(merged) == 2
+    assert merged[0]["spread_home"] == -4.5 and merged[0]["odds_event_id"] == "o1"
+    assert merged[1]["spread_home"] == 1.0 and "odds_event_id" not in merged[1]
+    assert fe.lines_by_team(merged)["KC"]["opponent"] == "BUF"
+
+
+def test_anytime_td_yes_no_mapping():
+    props = src.parse_odds_api_props({"bookmakers": [{"markets": [{"key": "player_anytime_td", "outcomes": [
+        {"name": "Yes", "description": "A B", "price": 150},
+        {"name": "No", "description": "A B", "price": -200}]}]}]})
+    assert props == [{"player": "A B", "market": "anytime_td", "line": 0.5,
+                      "over": 150.0, "under": -200.0}]
+
+
+def test_week_18_keeps_current_week(world, monkeypatch):
+    projs = {18: world["projs"][world["current"]]}
+    monkeypatch.setattr(src, "nfl_state", lambda: {"season": "2026", "week": 18,
+                                                   "season_type": "regular"})
+    monkeypatch.setattr(src, "sleeper_players", lambda: world["players"])
+    monkeypatch.setattr(src, "sleeper_week_projections", lambda s, w: projs.get(w, {}))
+    monkeypatch.setattr(src, "sleeper_week_stats", lambda s, w: {})
+    monkeypatch.setattr(src, "game_lines", lambda s, w: [])
+    ctx = fe.prepare(world["league"])
+    assert ctx["week"] == 18
+    assert any(p["proj_week"] > 0 for p in ctx["uni"].values())
+
+
+def test_player_outlook(world):
+    players, projs = world["players"], world["projs"][world["current"]]
+    wr = fe.find_player(players, "wr player0", "", "WR")
+    assert players[wr]["name"] == "WR Player0"
+    out = fe.player_outlook(players, projs, world["games"], wr, world["current"])
+    assert out["has_projection"] and out["stats"]["rec_yd"] > 0
+    assert out["fantasy"]["ppr"]["proj"] > out["fantasy"]["std"]["proj"]
+    assert 0 < out["anytime_td_prob"] < 1
+
+
+def test_api_validation_and_player(world, monkeypatch, tmp_path):
+    monkeypatch.setenv("SUPABASE_URL", os.environ.get("SUPABASE_URL", "https://x.supabase.co"))
+    monkeypatch.setenv("SUPABASE_KEY", os.environ.get("SUPABASE_KEY", "x.y.z"))
+    try:
+        from fastapi.testclient import TestClient
+        import api
+    except Exception as exc:  # noqa: BLE001
+        pytest.skip(f"api.py not importable here: {exc}")
+    fake = _fake_http(world)
+    calls = []
+    monkeypatch.setattr(src, "_get", lambda url, **kw: calls.append(url) or fake(url, **kw))
+    monkeypatch.setattr(src, "CACHE_DIR", str(tmp_path))
+    src.clear_cache()
+    api._league_cache.clear()
+    c = TestClient(api.app)
+
+    assert c.get("/api/fantasy/sleeper/leagues", params={"username": "../league/1"}).status_code == 400
+    assert c.get("/api/fantasy/props", params={"event_id": "../../sports"}).status_code == 400
+    assert c.post("/api/fantasy/league", json={"platform": "sleeper", "league_id": "123",
+                                               "season": "../x"}).status_code == 400
+    body = {"platform": "sleeper", "league_id": "123"}
+    assert c.post("/api/fantasy/analyze", json={**body, "team_id": "1", "week": 99}).status_code == 400
+    r = c.post("/api/fantasy/parlay", json={"legs": [{"kind": "prop", "player_id": "KC",
+                                                       "market": "rec", "line": 1, "odds": 50}]})
+    assert r.status_code == 400 and "American odds" in r.json()["detail"]
+
+    t1 = world["league"]["teams"][0]
+    r = c.post("/api/fantasy/trade", json={**body, "team_id": "1", "partner_id": "2",
+                                           "give": [t1["players"][0]], "get": [t1["players"][0]]})
+    assert r.status_code == 400
+
+    # refresh bypasses the 5-minute league cache
+    c.post("/api/fantasy/league", json=body)
+    n = sum(u.endswith("/league/123") for u in calls)
+    c.post("/api/fantasy/league", json=body)
+    assert sum(u.endswith("/league/123") for u in calls) == n
+    c.post("/api/fantasy/analyze", json={**body, "team_id": "1", "refresh": True})
+    assert sum(u.endswith("/league/123") for u in calls) == n + 1
+
+    r = c.get("/api/fantasy/player", params={"name": "WR Player0", "team": "Kansas City Chiefs",
+                                             "position": "WR"})
+    assert r.status_code == 200 and r.json()["available"] and r.json()["has_projection"]
+    r = c.get("/api/fantasy/player", params={"name": "Some Linebacker", "position": "LB"})
+    assert r.json()["available"] is False
+    r = c.get("/api/fantasy/player", params={"name": "Nobody Here", "position": "WR"})
+    assert r.json()["available"] is False
+
+
+def test_parlay_long_shot_not_zeroed_and_conflicts_flagged(world):
+    players, projs, games = world["players"], world["projs"][world["current"]], world["games"]
+    qb = next(p for p, v in players.items() if v["name"] == "QB Player0")
+    g0 = games[0]
+    key = f"{g0['away']}@{g0['home']}"
+    # A near-impossible leg (QB receptions) plus a normal one: the parlay is
+    # tiny but not zero, and it still gets fair odds.
+    r = fe.grade_parlay([
+        {"kind": "prop", "player_id": qb, "market": "rec", "line": 5.5, "side": "over", "odds": 900},
+        {"kind": "game", "game": key, "market": "total", "side": "over", "odds": -110},
+    ], projs, players, games)
+    assert 0 < r["legs"][0]["prob"] < 1e-4 and r["hit_prob"] > 0 and r["fair_odds"] is not None
+
+    r = fe.grade_parlay([
+        {"kind": "game", "game": key, "market": "ml", "team": g0["home"], "odds": -150},
+        {"kind": "game", "game": key, "market": "ml", "team": g0["away"], "odds": 130},
+    ], projs, players, games)
+    assert r["hit_prob"] == 0 and any(c["type"] == "conflict" for c in r["correlations"])
+
+    r = fe.grade_parlay([
+        {"kind": "game", "game": key, "market": "total", "side": "over", "line": 44, "odds": -110},
+        {"kind": "game", "game": key, "market": "total", "side": "under", "line": 50, "odds": -110},
+    ], projs, players, games)
+    assert r["hit_prob"] > 0 and not any(c["type"] == "conflict" for c in r["correlations"])
